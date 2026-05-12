@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { parseYaml, ParseError } from '$lib/parser/yaml-parser.js';
+	import { writable } from 'svelte/store';
+	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
+	import UIEditor from '$lib/components/UIEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
 
 	// ── Example definitions ──────────────────────────────────────
@@ -17,6 +19,11 @@
 	let diagramWidth = $state(860);
 	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
+	/** Controls which editor is active: the raw YAML textarea or the visual UI form.
+	 *  Uses a writable store so template {#if $editorMode} blocks always react. */
+	const editorMode = writable<'yaml' | 'ui'>('yaml');
+	/** Incrementing this key forces UIEditor to reinitialise from the current spec. */
+	let uiEditorKey = $state(0);
 
 	async function loadExample(file: string) {
 		try {
@@ -26,6 +33,8 @@
 			editorYaml = text;
 			activeExample = file;
 			compileYaml();
+			// Reinitialise UIEditor so it reflects the newly loaded example.
+			uiEditorKey++;
 		} catch (e) {
 			parseError = `Could not load example: ${(e as Error).message}`;
 		}
@@ -39,6 +48,30 @@
 			parseError = e instanceof ParseError ? e.message : String(e);
 			spec = null;
 		}
+	}
+
+	/**
+	 * Called by UIEditor whenever the user changes a field.
+	 * Keeps editorYaml in sync so the YAML view is always up to date.
+	 */
+	function handleUIChange(newSpec: DiagramSpec) {
+		spec = newSpec;
+		editorYaml = dumpYaml(newSpec);
+		parseError = null;
+	}
+
+	/**
+	 * Switch between 'yaml' and 'ui' editor modes.
+	 * `spec` is always kept in sync with editorYaml via oninput, so we only
+	 * need to verify it's valid before switching to UI mode.
+	 */
+	function setEditorMode(mode: 'yaml' | 'ui') {
+		if (mode === $editorMode) return;
+		if (mode === 'ui') {
+			if (!spec) return;
+			uiEditorKey++;
+		}
+		editorMode.set(mode);
 	}
 
 	// Load the first example on mount using Svelte 5 effect
@@ -84,18 +117,53 @@
 
 	<main>
 		{#if editorVisible}
-			<section class="editor-panel" aria-label="YAML editor">
+			<section class="editor-panel" aria-label="YAML editor" data-editor-mode={$editorMode}>
 				<div class="editor-toolbar">
-					<span class="editor-label">YAML Spec</span>
-					<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
+					<span class="editor-label">
+						{$editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}
+					</span>
+					<div class="mode-switch" role="group" aria-label="Editor mode">
+						<button
+							class="mode-btn"
+							class:active={$editorMode === 'ui'}
+							onclick={() => setEditorMode('ui')}
+							disabled={!!parseError && $editorMode === 'yaml'}
+							title={parseError && $editorMode === 'yaml'
+								? 'Fix YAML errors to use the visual editor'
+								: 'Switch to visual UI editor'}
+							aria-pressed={$editorMode === 'ui'}
+						>
+							UI
+						</button>
+						<button
+							class="mode-btn"
+							class:active={$editorMode === 'yaml'}
+							onclick={() => setEditorMode('yaml')}
+							title="Switch to YAML editor"
+							aria-pressed={$editorMode === 'yaml'}
+						>
+							YAML
+						</button>
+					</div>
+					{#if $editorMode === 'yaml'}
+						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
+					{/if}
 				</div>
-				<textarea
-					class="yaml-editor"
-					bind:value={editorYaml}
-					oninput={compileYaml}
-					spellcheck={false}
-					aria-label="YAML diagram specification"
-				></textarea>
+
+				{#if $editorMode === 'yaml'}
+					<textarea
+						class="yaml-editor"
+						bind:value={editorYaml}
+						oninput={compileYaml}
+						spellcheck={false}
+						aria-label="YAML diagram specification"
+					></textarea>
+				{:else if spec}
+					{#key uiEditorKey}
+						<UIEditor {spec} onchange={handleUIChange} />
+					{/key}
+				{/if}
+
 				{#if parseError}
 					<div class="error-banner" role="alert">
 						<strong>Parse error:</strong>
@@ -231,6 +299,40 @@
 		justify-content: space-between;
 		padding: 6px 10px;
 		border-bottom: 1px solid #21262d;
+		gap: 6px;
+	}
+
+	.mode-switch {
+		display: flex;
+		border: 1px solid #30363d;
+		border-radius: 5px;
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.mode-btn {
+		padding: 2px 10px;
+		background: transparent;
+		border: none;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 11px;
+		transition: background 0.12s, color 0.12s;
+	}
+	.mode-btn + .mode-btn {
+		border-left: 1px solid #30363d;
+	}
+	.mode-btn:hover:not(:disabled) {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.mode-btn.active {
+		background: #1d3557;
+		color: #90cdf4;
+	}
+	.mode-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.editor-label {

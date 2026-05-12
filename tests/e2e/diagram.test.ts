@@ -124,3 +124,129 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(page.getByRole('status')).toBeVisible({ timeout: 5_000 });
 	});
 });
+
+test.describe('UI Editor', () => {
+	test('mode switch buttons are visible when editor is open', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await expect(page.getByRole('button', { name: 'UI' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'YAML' })).toBeVisible();
+	});
+
+	test('can switch to UI editor mode', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+
+		// Visual editor form should appear
+		const uiEditor = page.getByRole('form', { name: 'Visual diagram editor' });
+		await expect(uiEditor).toBeVisible({ timeout: 5_000 });
+
+		// YAML textarea should be hidden
+		const textarea = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(textarea).not.toBeVisible();
+	});
+
+	test('can switch back from UI to YAML mode', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+		await page.getByRole('button', { name: 'YAML' }).click();
+
+		const textarea = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(textarea).toBeVisible({ timeout: 5_000 });
+	});
+
+	test('UI editor shows form fields for diagram properties', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+
+		await expect(page.getByLabel('Diagram title')).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByLabel('Diagram type')).toBeVisible();
+		await expect(page.getByLabel('Theme')).toBeVisible();
+	});
+
+	test('UI editor shows nodes list', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+
+		const nodesList = page.getByRole('list', { name: 'Nodes list' });
+		await expect(nodesList).toBeVisible({ timeout: 5_000 });
+
+		// Networking example has 10 nodes
+		await expect(nodesList.getByRole('listitem')).toHaveCount(10, { timeout: 5_000 });
+	});
+
+	test('editing title in UI mode updates the diagram immediately', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+
+		const titleInput = page.getByLabel('Diagram title');
+		await titleInput.fill('My Test Diagram');
+		// Trigger the oninput handler
+		await titleInput.dispatchEvent('input');
+
+		// Diagram SVG title attribute should update
+		await expect(page.locator('svg.iso-diagram')).toHaveAttribute(
+			'data-diagram-title',
+			'My Test Diagram',
+			{ timeout: 5_000 }
+		);
+	});
+
+	test('UI edits are reflected in YAML when switching back', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+
+		const titleInput = page.getByLabel('Diagram title');
+		await titleInput.fill('Round-trip Title');
+		await titleInput.dispatchEvent('input');
+
+		// Switch back to YAML mode
+		await page.getByRole('button', { name: 'YAML' }).click();
+
+		const textarea = page.locator('textarea[aria-label="YAML diagram specification"]');
+		const content = await textarea.inputValue();
+		expect(content).toContain('Round-trip Title');
+	});
+
+	test('adding a node in UI mode updates the diagram', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+		await page.waitForSelector('[aria-label="Nodes list"]');
+
+		const addNodeBtn = page.getByRole('button', { name: 'Add node' });
+		await addNodeBtn.click();
+
+		// Node count in the list should increase (10 → 11)
+		const nodesList = page.getByRole('list', { name: 'Nodes list' });
+		await expect(nodesList.getByRole('listitem')).toHaveCount(11, { timeout: 5_000 });
+	});
+
+	test('UI editor is hidden when editor panel is toggled off', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		await page.getByRole('button', { name: 'UI' }).click();
+		const uiEditor = page.getByRole('form', { name: 'Visual diagram editor' });
+		await expect(uiEditor).toBeVisible({ timeout: 5_000 });
+
+		// Hide the entire editor panel
+		const toggleBtn = page.getByRole('button', { name: /Hide|Edit YAML/i });
+		await toggleBtn.click();
+		await expect(uiEditor).not.toBeVisible();
+	});
+});
