@@ -85,6 +85,7 @@
 			class="toggle-grid"
 			onclick={() => (showGrid = !showGrid)}
 			aria-pressed={showGrid}
+			aria-label="Toggle grid"
 			title={showGrid ? 'Hide grid' : 'Show grid'}
 		>
 			{showGrid ? '⊞ Grid' : '⊟ Grid'}

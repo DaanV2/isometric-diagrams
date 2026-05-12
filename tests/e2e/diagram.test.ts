@@ -128,7 +128,7 @@ test.describe('Isometric Diagrams App', () => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
 
-		const gridBtn = page.getByRole('button', { name: /Grid/i });
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
 		await expect(gridBtn).toBeVisible();
 	});
 
@@ -150,7 +150,7 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(svg).toHaveAttribute('data-show-grid', 'true');
 
 		// Click the grid toggle button to hide the grid
-		const gridBtn = page.getByRole('button', { name: /Grid/i });
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
 		await gridBtn.click();
 		await expect(svg).toHaveAttribute('data-show-grid', 'false');
 
@@ -163,7 +163,7 @@ test.describe('Isometric Diagrams App', () => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
 
-		const gridBtn = page.getByRole('button', { name: /Grid/i });
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
 
 		// Initially pressed (grid on)
 		await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
