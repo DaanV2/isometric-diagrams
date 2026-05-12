@@ -62,7 +62,7 @@
 			<span>Isometric Diagrams</span>
 		</div>
 		<nav aria-label="Examples">
-			{#each EXAMPLES as ex}
+			{#each EXAMPLES as ex (ex.file)}
 				<button
 					class="example-btn"
 					class:active={activeExample === ex.file}
