@@ -133,26 +133,9 @@ export function importCloudFormation(source: string): DiagramSpec {
 		}
 	}
 
-	// Group by service prefix (e.g. AWS::EC2 -> EC2 group)
+	// Group by service prefix (e.g. AWS::EC2 -> EC2 group), building both
+	// groupMap (id -> nodeIds) and groupLabelMap (id -> display label) in one pass.
 	const groupMap = new Map<string, string[]>();
-	for (const [logicalId, resource] of Object.entries(resources)) {
-		if (typeof resource !== 'object' || resource === null) continue;
-		const res = resource as Record<string, unknown>;
-		const cfnType = typeof res['Type'] === 'string' ? res['Type'] : 'Unknown';
-		const parts = cfnType.split('::');
-		const groupId = parts.length >= 2 ? `${parts[0]}_${parts[1]}`.toLowerCase() : 'other';
-		const groupLabel = parts.length >= 2 ? `${parts[1]}` : 'Other';
-
-		if (!groupMap.has(groupId)) {
-			groupMap.set(groupId, []);
-		}
-		groupMap.get(groupId)!.push(logicalId);
-
-		// Only create groups for groupId (labels stored separately below)
-		void groupLabel;
-	}
-
-	// Build group label map
 	const groupLabelMap = new Map<string, string>();
 	for (const [logicalId, resource] of Object.entries(resources)) {
 		if (typeof resource !== 'object' || resource === null) continue;
@@ -161,6 +144,9 @@ export function importCloudFormation(source: string): DiagramSpec {
 		const parts = cfnType.split('::');
 		const groupId = parts.length >= 2 ? `${parts[0]}_${parts[1]}`.toLowerCase() : 'other';
 		const groupLabel = parts.length >= 2 ? `${parts[1]}` : 'Other';
+
+		if (!groupMap.has(groupId)) groupMap.set(groupId, []);
+		groupMap.get(groupId)!.push(logicalId);
 		groupLabelMap.set(groupId, groupLabel);
 	}
 
