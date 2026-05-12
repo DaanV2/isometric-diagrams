@@ -64,6 +64,32 @@ export interface DiagramEdge {
 	style?: StyleOverride;
 }
 
+/** A flat arrow lying on the isometric ground plane, going from one grid position to another */
+export interface DiagramFlatArrow {
+	id?: string;
+	/** Starting grid position */
+	from: Position;
+	/** Ending grid position */
+	to: Position;
+	label?: string;
+	/** Whether to draw an arrowhead at the end (default true) */
+	directed?: boolean;
+	style?: StyleOverride;
+}
+
+/** A flat (ground-level) tile area used to colour the floor or mark a bordered region */
+export interface DiagramFloorTile {
+	id?: string;
+	/** Top corner grid position of the tile area */
+	position: Position;
+	/** Width in tiles along the x-axis (default 1) */
+	width?: number;
+	/** Depth in tiles along the y-axis (default 1) */
+	depth?: number;
+	label?: string;
+	style?: StyleOverride;
+}
+
 /** A logical group that highlights a set of nodes */
 export interface DiagramGroup {
 	id: string;
@@ -94,4 +120,8 @@ export interface DiagramSpec {
 	nodes: DiagramNode[];
 	edges?: DiagramEdge[];
 	groups?: DiagramGroup[];
+	/** Flat arrows lying on the ground plane */
+	flatArrows?: DiagramFlatArrow[];
+	/** Flat tile areas on the ground used for floor colouring or area borders */
+	floorTiles?: DiagramFloorTile[];
 }

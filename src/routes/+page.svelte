@@ -7,7 +7,8 @@
 	const EXAMPLES: { name: string; file: string }[] = [
 		{ name: 'Multi-Region Network', file: 'networking.yaml' },
 		{ name: 'Cargo Flow', file: 'warehouse.yaml' },
-		{ name: 'Order Flow', file: 'simple-flow.yaml' }
+		{ name: 'Order Flow', file: 'simple-flow.yaml' },
+		{ name: 'Floor Plan', file: 'floor-plan.yaml' }
 	];
 
 	let editorYaml = $state('');

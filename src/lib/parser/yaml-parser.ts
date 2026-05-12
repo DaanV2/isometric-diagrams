@@ -1,5 +1,12 @@
 import yaml from 'js-yaml';
-import type { DiagramSpec, DiagramNode, DiagramEdge, DiagramGroup } from '../types/diagram.js';
+import type {
+	DiagramSpec,
+	DiagramNode,
+	DiagramEdge,
+	DiagramGroup,
+	DiagramFlatArrow,
+	DiagramFloorTile
+} from '../types/diagram.js';
 
 export class ParseError extends Error {
 	constructor(
@@ -83,11 +90,54 @@ function validate(raw: unknown): DiagramSpec {
 			})
 		: [];
 
+	const flatArrows: DiagramFlatArrow[] = Array.isArray(obj['flatArrows'])
+		? (obj['flatArrows'] as unknown[]).map((a, i) => {
+				if (typeof a !== 'object' || a === null) {
+					throw new ParseError(`flatArrows[${i}] must be an object.`);
+				}
+				const arr = a as Record<string, unknown>;
+				if (typeof arr['from'] !== 'object' || arr['from'] === null) {
+					throw new ParseError(`flatArrows[${i}] must have a "from" position object.`);
+				}
+				if (typeof arr['to'] !== 'object' || arr['to'] === null) {
+					throw new ParseError(`flatArrows[${i}] must have a "to" position object.`);
+				}
+				const from = arr['from'] as Record<string, unknown>;
+				const to = arr['to'] as Record<string, unknown>;
+				if (typeof from['x'] !== 'number' || typeof from['y'] !== 'number') {
+					throw new ParseError(`flatArrows[${i}] "from" must have numeric "x" and "y".`);
+				}
+				if (typeof to['x'] !== 'number' || typeof to['y'] !== 'number') {
+					throw new ParseError(`flatArrows[${i}] "to" must have numeric "x" and "y".`);
+				}
+				return arr as unknown as DiagramFlatArrow;
+			})
+		: [];
+
+	const floorTiles: DiagramFloorTile[] = Array.isArray(obj['floorTiles'])
+		? (obj['floorTiles'] as unknown[]).map((t, i) => {
+				if (typeof t !== 'object' || t === null) {
+					throw new ParseError(`floorTiles[${i}] must be an object.`);
+				}
+				const tile = t as Record<string, unknown>;
+				if (typeof tile['position'] !== 'object' || tile['position'] === null) {
+					throw new ParseError(`floorTiles[${i}] must have a "position" object.`);
+				}
+				const pos = tile['position'] as Record<string, unknown>;
+				if (typeof pos['x'] !== 'number' || typeof pos['y'] !== 'number') {
+					throw new ParseError(`floorTiles[${i}] "position" must have numeric "x" and "y".`);
+				}
+				return tile as unknown as DiagramFloorTile;
+			})
+		: [];
+
 	return {
-		...(obj as Omit<DiagramSpec, 'nodes' | 'edges' | 'groups'>),
+		...(obj as Omit<DiagramSpec, 'nodes' | 'edges' | 'groups' | 'flatArrows' | 'floorTiles'>),
 		nodes,
 		edges,
-		groups
+		groups,
+		flatArrows,
+		floorTiles
 	} as DiagramSpec;
 }
 
