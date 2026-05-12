@@ -15,29 +15,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-pages:
     runs-on: ubuntu-latest
+    name: 🔨 Build pages
     steps:
-      - name: Checkout
+      - name: 📦 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: 🏗️ Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
+      - name: 🛠️ Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: 🔨 Build pages
         run: npm run build
         env:
           # Set BASE_PATH to the repository name for GitHub Pages sub-path deployment.
           # For a custom domain or root deployment, leave this empty.
           BASE_PATH: ${{ github.event.repository.name == format('{0}.github.io', github.actor) && '' || format('/{0}', github.event.repository.name) }}
 
-      - name: Upload Pages artifact
+      - name: 🚚 Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: build
@@ -45,6 +46,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    name: 🚚 Deploy pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
