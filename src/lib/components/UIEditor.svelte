@@ -37,17 +37,28 @@
 
 	let { spec, onchange }: Props = $props();
 
-	// Local mutable state – initialised once from the spec prop.
-	// The parent uses {#key uiEditorKey} to reset this component when needed.
+	// These fields are intentionally initialised once from the `spec` prop snapshot.
+	// The parent destroys and recreates this component via {#key uiEditorKey} whenever
+	// it needs to sync a new spec in (e.g. after loading an example or switching modes).
+	// svelte-ignore state_referenced_locally
 	let title = $state(spec.title ?? '');
+	// svelte-ignore state_referenced_locally
 	let type = $state<DiagramType>(spec.type ?? 'generic');
+	// svelte-ignore state_referenced_locally
 	let description = $state(spec.description ?? '');
+	// svelte-ignore state_referenced_locally
 	let theme = $state<'light' | 'dark'>(spec.settings?.theme ?? 'dark');
+	// svelte-ignore state_referenced_locally
 	let tileSize = $state(spec.settings?.tileSize ?? 64);
+	// svelte-ignore state_referenced_locally
 	let showGrid = $state(spec.settings?.showGrid ?? true);
+	// svelte-ignore state_referenced_locally
 	let padding = $state(spec.settings?.padding ?? 2);
+	// svelte-ignore state_referenced_locally
 	let nodes = $state<DiagramNode[]>(structuredClone(spec.nodes ?? []));
+	// svelte-ignore state_referenced_locally
 	let edges = $state<DiagramEdge[]>(structuredClone(spec.edges ?? []));
+	// svelte-ignore state_referenced_locally
 	let groups = $state<DiagramGroup[]>(structuredClone(spec.groups ?? []));
 
 	// Drag state for node reordering
@@ -311,7 +322,7 @@
 			<button class="add-btn" onclick={addEdge} aria-label="Add edge">+ Add</button>
 		</div>
 		<ul class="item-list" aria-label="Edges list">
-			{#each edges as edge, i}
+			{#each edges as edge, i (edge.from + '->' + edge.to + '-' + i)}
 				<li class="item" aria-label={`Edge ${i + 1}: ${edge.from} to ${edge.to}`}>
 					<div class="item-fields">
 						<div class="edge-row">
@@ -390,7 +401,7 @@
 			<button class="add-btn" onclick={addGroup} aria-label="Add group">+ Add</button>
 		</div>
 		<ul class="item-list" aria-label="Groups list">
-			{#each groups as group, i}
+			{#each groups as group, i (group.id + '-' + i)}
 				<li class="item" aria-label={`Group ${i + 1}: ${group.label}`}>
 					<div class="item-fields">
 						<input
