@@ -35,7 +35,7 @@ jobs:
         env:
           # Set BASE_PATH to the repository name for GitHub Pages sub-path deployment.
           # For a custom domain or root deployment, leave this empty.
-          BASE_PATH: ${{ github.event.repository.name == github.actor + '.github.io' && '' || format('/{0}', github.event.repository.name) }}
+          BASE_PATH: ${{ github.event.repository.name == format('{0}.github.io', github.actor) && '' || format('/{0}', github.event.repository.name) }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
