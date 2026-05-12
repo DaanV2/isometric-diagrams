@@ -97,10 +97,13 @@
 					aria-label="YAML diagram specification"
 				></textarea>
 				{#if parseError}
-					<div class="error-banner" role="alert">
-						<strong>Parse error:</strong>
-						{parseError}
-					</div>
+					{#key parseError}
+						<div class="error-banner animate-pop" role="alert">
+							<span class="error-icon" aria-hidden="true">⚠</span>
+							<strong>Parse error:</strong>
+							{parseError}
+						</div>
+					{/key}
 				{/if}
 			</section>
 		{/if}
@@ -113,7 +116,9 @@
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
 			{:else}
-				<div class="placeholder error">Fix the YAML to see the diagram.</div>
+				{#key parseError}
+					<div class="placeholder error animate-pop">Fix the YAML to see the diagram.</div>
+				{/key}
 			{/if}
 		</section>
 	</main>
@@ -268,11 +273,37 @@
 	}
 
 	.error-banner {
-		padding: 8px 10px;
-		background: #3b0a0a;
-		border-top: 1px solid #6b1a1a;
-		color: #fca5a5;
-		font-size: 11px;
+		padding: 1em;
+		background: #7f1d1d;
+		border-top: 2px solid #ef4444;
+		color: #fecaca;
+		font-size: 1.2rem;
+		line-height: 1.5;
+		border-radius: 0 0 8px 8px;
+		display: flex;
+		gap: 0.5em;
+		align-items: flex-start;
+	}
+
+	.error-icon {
+		font-size: 1.4rem;
+		flex-shrink: 0;
+		line-height: 1.3;
+	}
+
+	.animate-pop {
+		animation: pop 0.5s ease-out;
+	}
+
+	@keyframes pop {
+		0% {
+			scale: 0.85;
+			opacity: 0;
+		}
+		100% {
+			scale: 1;
+			opacity: 1;
+		}
 	}
 
 	/* ── Diagram panel ────────────────────── */
@@ -299,5 +330,7 @@
 	}
 	.placeholder.error {
 		color: #f87171;
+		font-size: 1.1rem;
+		font-weight: 600;
 	}
 </style>
