@@ -103,6 +103,19 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(page.getByRole('alert')).toContainText('Parse error');
 	});
 
+	test('error banner has the animate-pop class for visibility', async ({ page }) => {
+		await page.goto('/');
+		const editor = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(editor).toBeVisible({ timeout: 8_000 });
+
+		await editor.fill('title: "broken"\nnodes: not-an-array');
+		await editor.dispatchEvent('input');
+
+		const alert = page.getByRole('alert');
+		await expect(alert).toBeVisible({ timeout: 5_000 });
+		await expect(alert).toHaveClass(/animate-pop/);
+	});
+
 	test('SVG contains edges connecting nodes', async ({ page }) => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
