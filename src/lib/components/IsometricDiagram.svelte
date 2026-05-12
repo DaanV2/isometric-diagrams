@@ -9,16 +9,18 @@
 		spec: DiagramSpec;
 		/** Override theme. If undefined, uses spec.settings.theme (default dark). */
 		theme?: 'light' | 'dark';
+		/** Override grid visibility. If undefined, uses spec.settings.showGrid (default true). */
+		showGrid?: boolean;
 		width?: number;
 		height?: number;
 	}
 
-	let { spec, theme, width = 900, height = 600 }: Props = $props();
+	let { spec, theme, showGrid: showGridProp, width = 900, height = 600 }: Props = $props();
 
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
 	const tileSize = $derived(spec.settings?.tileSize ?? 64);
-	const showGrid = $derived(spec.settings?.showGrid ?? true);
+	const showGrid = $derived(showGridProp ?? spec.settings?.showGrid ?? true);
 
 	/** Bounding box of all node positions in screen space */
 	const bbox = $derived(
@@ -99,6 +101,7 @@
 	xmlns="http://www.w3.org/2000/svg"
 	class="iso-diagram"
 	data-diagram-title={spec.title}
+	data-show-grid={showGrid}
 	style="
 		background: {themeVars.background};
 		--background: {themeVars.background};
