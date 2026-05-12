@@ -1,0 +1,102 @@
+title: "Order Processing Flow"
+type: flow
+description: "Simple e-commerce order lifecycle"
+
+settings:
+  theme: dark
+  tileSize: 64
+  showGrid: false
+
+nodes:
+  - id: customer
+    label: "Customer"
+    type: person
+    position: { x: 0, y: 2 }
+
+  - id: storefront
+    label: "Storefront"
+    type: service
+    description: "Next.js app"
+    position: { x: 2, y: 2 }
+
+  - id: order-svc
+    label: "Order Service"
+    type: service
+    position: { x: 4, y: 1 }
+
+  - id: payment-svc
+    label: "Payment"
+    type: service
+    description: "Stripe gateway"
+    position: { x: 4, y: 3 }
+
+  - id: order-queue
+    label: "Order Queue"
+    type: queue
+    description: "SQS"
+    position: { x: 6, y: 2 }
+
+  - id: inventory-svc
+    label: "Inventory"
+    type: service
+    position: { x: 8, y: 1 }
+
+  - id: shipping-svc
+    label: "Shipping"
+    type: service
+    description: "FedEx API"
+    position: { x: 8, y: 3 }
+
+  - id: notifications
+    label: "Notifications"
+    type: service
+    description: "Email/SMS"
+    position: { x: 10, y: 2 }
+
+  - id: db
+    label: "Orders DB"
+    type: database
+    description: "PostgreSQL"
+    position: { x: 6, y: 0 }
+
+edges:
+  - from: customer
+    to: storefront
+    type: flow
+
+  - from: storefront
+    to: order-svc
+    label: "place order"
+    type: flow
+
+  - from: order-svc
+    to: payment-svc
+    label: "charge"
+    type: flow
+
+  - from: order-svc
+    to: order-queue
+    label: "enqueue"
+    type: data
+
+  - from: order-svc
+    to: db
+    type: data
+
+  - from: order-queue
+    to: inventory-svc
+    type: flow
+
+  - from: order-queue
+    to: shipping-svc
+    type: flow
+
+  - from: shipping-svc
+    to: notifications
+    label: "track"
+    type: flow
+
+  - from: payment-svc
+    to: notifications
+    label: "receipt"
+    type: flow
