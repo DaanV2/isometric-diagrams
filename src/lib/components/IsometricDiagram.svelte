@@ -1,0 +1,266 @@
+<script lang="ts">
+	import type { DiagramSpec, DiagramNode } from '../types/diagram.js';
+	import { boundingBox, isoToScreen } from '../renderer/isometric.js';
+	import { lightTheme, darkTheme } from '../renderer/theme.js';
+	import IsometricNode from './IsometricNode.svelte';
+	import IsometricEdge from './IsometricEdge.svelte';
+
+	interface Props {
+		spec: DiagramSpec;
+		/** Override theme. If undefined, uses spec.settings.theme (default dark). */
+		theme?: 'light' | 'dark';
+		width?: number;
+		height?: number;
+	}
+
+	let { spec, theme, width = 900, height = 600 }: Props = $props();
+
+	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
+	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
+	const tileSize = $derived(spec.settings?.tileSize ?? 64);
+	const padding = $derived((spec.settings?.padding ?? 2) * tileSize);
+	const showGrid = $derived(spec.settings?.showGrid ?? true);
+
+	/** Bounding box of all node positions in screen space */
+	const bbox = $derived(
+		boundingBox(
+			spec.nodes.map((n) => ({ x: n.position.x, y: n.position.y, z: n.position.z ?? 0 })),
+			{ tileSize }
+		)
+	);
+
+	/** Translate so the content is centred in the SVG */
+	const offsetX = $derived(width / 2 - (bbox.minX + bbox.width / 2));
+	const offsetY = $derived(height / 2 - (bbox.minY + bbox.height / 2));
+
+	let selectedNodeId = $state<string | null>(null);
+
+	function selectNode(id: string) {
+		selectedNodeId = selectedNodeId === id ? null : id;
+	}
+
+	/** Build a list of grid lines for background decoration */
+	const gridLines = $derived(() => {
+		if (!showGrid) return [];
+		const positions = spec.nodes.map((n) => n.position);
+		if (positions.length === 0) return [];
+		const xs = positions.map((p) => p.x);
+		const ys = positions.map((p) => p.y);
+		const minGX = Math.min(...xs) - 1;
+		const maxGX = Math.max(...xs) + 1;
+		const minGY = Math.min(...ys) - 1;
+		const maxGY = Math.max(...ys) + 1;
+		const lines: string[] = [];
+		for (let gx = minGX; gx <= maxGX; gx++) {
+			const a = isoToScreen(gx, minGY, 0, { tileSize });
+			const b = isoToScreen(gx, maxGY, 0, { tileSize });
+			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
+		}
+		for (let gy = minGY; gy <= maxGY; gy++) {
+			const a = isoToScreen(minGX, gy, 0, { tileSize });
+			const b = isoToScreen(maxGX, gy, 0, { tileSize });
+			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
+		}
+		return lines;
+	});
+
+	/** Sort nodes back-to-front (painter's algorithm) */
+	const sortedNodes = $derived(
+		[...spec.nodes].sort(
+			(a, b) => a.position.x + a.position.y - (b.position.x + b.position.y)
+		)
+	);
+
+	/** Group boundary polygons */
+	const groupPolygons = $derived(() => {
+		if (!spec.groups) return [];
+		return spec.groups.map((g) => {
+			const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
+			if (memberNodes.length === 0) return null;
+			const hull = memberNodes.map((n) => {
+				const s = isoToScreen(n.position.x, n.position.y, n.position.z ?? 0, { tileSize });
+				return s;
+			});
+			const xs = hull.map((p) => p.x);
+			const ys = hull.map((p) => p.y);
+			const pad = tileSize * 1.2;
+			const minX = Math.min(...xs) - pad;
+			const maxX = Math.max(...xs) + pad;
+			const minY = Math.min(...ys) - pad;
+			const maxY = Math.max(...ys) + pad * 0.5;
+			return { id: g.id, label: g.label, color: g.color, minX, minY, maxX, maxY };
+		}).filter(Boolean);
+	});
+</script>
+
+<svg
+	{width}
+	{height}
+	viewBox="0 0 {width} {height}"
+	xmlns="http://www.w3.org/2000/svg"
+	class="iso-diagram"
+	data-diagram-title={spec.title}
+	style="
+		background: {themeVars.background};
+		--background: {themeVars.background};
+		--text: {themeVars.text};
+		--text-secondary: {themeVars.textSecondary};
+	"
+>
+	<!-- Title -->
+	<text x="16" y="24" class="diagram-title" fill={themeVars.text}>{spec.title}</text>
+	{#if spec.description}
+		<text x="16" y="40" class="diagram-desc" fill={themeVars.textSecondary}
+			>{spec.description}</text
+		>
+	{/if}
+
+	<g class="content" style="transform: translate({offsetX}px, {offsetY}px)">
+		<!-- Grid lines -->
+		{#if showGrid}
+			{#each gridLines() as d}
+				<path {d} fill="none" stroke={themeVars.gridLine} stroke-width="0.5" opacity="0.5" />
+			{/each}
+		{/if}
+
+		<!-- Group highlights -->
+		{#each groupPolygons() as grp}
+			{#if grp}
+				<rect
+					x={grp.minX}
+					y={grp.minY}
+					width={grp.maxX - grp.minX}
+					height={grp.maxY - grp.minY}
+					rx="8"
+					fill={grp.color ? grp.color + '18' : themeVars.groupFill}
+					stroke={grp.color ?? themeVars.groupStroke}
+					stroke-width="1.5"
+					stroke-dasharray="6,3"
+				/>
+				<text
+					x={grp.minX + 8}
+					y={grp.minY + 14}
+					class="group-label"
+					fill={grp.color ?? themeVars.textSecondary}
+				>
+					{grp.label}
+				</text>
+			{/if}
+		{/each}
+
+		<!-- Edges (drawn below nodes) -->
+		{#each spec.edges ?? [] as edge (edge.id ?? `${edge.from}-${edge.to}`)}
+			<IsometricEdge
+				{edge}
+				nodes={spec.nodes}
+				{tileSize}
+				offsetX={0}
+				offsetY={0}
+			/>
+		{/each}
+
+		<!-- Nodes (painter's order) -->
+		{#each sortedNodes as node (node.id)}
+			<IsometricNode
+				{node}
+				{tileSize}
+				offsetX={0}
+				offsetY={0}
+				selected={selectedNodeId === node.id}
+				onclick={selectNode}
+			/>
+		{/each}
+	</g>
+</svg>
+
+{#if selectedNodeId}
+	{@const sel = spec.nodes.find((n) => n.id === selectedNodeId)}
+	{#if sel}
+		<div
+			class="node-info"
+			style="
+				background: {themeVars.background};
+				color: {themeVars.text};
+				border-color: {themeVars.gridLine};
+			"
+			role="status"
+			aria-live="polite"
+		>
+			<strong>{sel.label}</strong>
+			{#if sel.type}<span class="badge">{sel.type}</span>{/if}
+			{#if sel.description}<p>{sel.description}</p>{/if}
+			{#if sel.meta}
+				<dl>
+					{#each Object.entries(sel.meta) as [k, v]}
+						<dt>{k}</dt>
+						<dd>{v}</dd>
+					{/each}
+				</dl>
+			{/if}
+		</div>
+	{/if}
+{/if}
+
+<style>
+	.iso-diagram {
+		display: block;
+		border-radius: 8px;
+		font-family: system-ui, sans-serif;
+	}
+	.diagram-title {
+		font-size: 15px;
+		font-weight: 700;
+		font-family: system-ui, sans-serif;
+	}
+	.diagram-desc {
+		font-size: 11px;
+		font-family: system-ui, sans-serif;
+	}
+	.group-label {
+		font-size: 10px;
+		font-family: system-ui, sans-serif;
+		font-weight: 600;
+	}
+	.node-info {
+		position: absolute;
+		bottom: 16px;
+		right: 16px;
+		padding: 12px 16px;
+		border: 1px solid;
+		border-radius: 8px;
+		font-size: 13px;
+		min-width: 160px;
+		max-width: 240px;
+	}
+	.node-info strong {
+		display: block;
+		margin-bottom: 4px;
+	}
+	.badge {
+		display: inline-block;
+		padding: 1px 6px;
+		border-radius: 4px;
+		font-size: 10px;
+		background: #1d3557;
+		color: #a8dadc;
+		margin-bottom: 6px;
+	}
+	.node-info p {
+		margin: 4px 0 6px;
+		font-size: 11px;
+	}
+	.node-info dl {
+		margin: 0;
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 2px 8px;
+	}
+	.node-info dt {
+		font-weight: 600;
+		font-size: 10px;
+	}
+	.node-info dd {
+		margin: 0;
+		font-size: 10px;
+	}
+</style>

@@ -1,0 +1,156 @@
+title: "Multi-Region Network"
+type: networking
+description: "Microservices across two AWS regions with load balancers and databases"
+
+settings:
+  theme: dark
+  tileSize: 64
+  showGrid: true
+  padding: 2
+
+nodes:
+  # ── US-EAST region ──────────────────────────────────────────
+  - id: us-lb
+    label: "Load Balancer"
+    type: loadbalancer
+    description: "ALB us-east-1"
+    position: { x: 2, y: 0 }
+    meta:
+      region: us-east-1
+      status: healthy
+
+  - id: us-api-1
+    label: "API Service"
+    type: service
+    description: "Node.js v20"
+    position: { x: 0, y: 2 }
+    meta:
+      region: us-east-1
+      replicas: "3"
+
+  - id: us-api-2
+    label: "Auth Service"
+    type: service
+    description: "OAuth2 gateway"
+    position: { x: 2, y: 2 }
+    meta:
+      region: us-east-1
+      replicas: "2"
+
+  - id: us-cache
+    label: "Redis Cache"
+    type: database
+    description: "ElastiCache"
+    position: { x: 4, y: 2 }
+    meta:
+      region: us-east-1
+      engine: redis
+
+  - id: us-db
+    label: "Primary DB"
+    type: database
+    description: "Aurora MySQL"
+    position: { x: 2, y: 4 }
+    meta:
+      region: us-east-1
+      engine: mysql
+
+  # ── EU-WEST region ──────────────────────────────────────────
+  - id: eu-lb
+    label: "Load Balancer"
+    type: loadbalancer
+    description: "ALB eu-west-1"
+    position: { x: 8, y: 0 }
+    meta:
+      region: eu-west-1
+      status: healthy
+
+  - id: eu-api-1
+    label: "API Service"
+    type: service
+    description: "Node.js v20"
+    position: { x: 6, y: 2 }
+    meta:
+      region: eu-west-1
+      replicas: "2"
+
+  - id: eu-db
+    label: "Read Replica"
+    type: database
+    description: "Aurora MySQL"
+    position: { x: 8, y: 4 }
+    meta:
+      region: eu-west-1
+      engine: mysql
+
+  # ── Shared ──────────────────────────────────────────────────
+  - id: cdn
+    label: "CDN"
+    type: cloud
+    description: "CloudFront"
+    position: { x: 5, y: -2 }
+
+  - id: gateway
+    label: "API Gateway"
+    type: gateway
+    description: "Global endpoint"
+    position: { x: 5, y: 0 }
+
+edges:
+  - from: cdn
+    to: gateway
+    label: HTTPS
+    type: network
+
+  - from: gateway
+    to: us-lb
+    type: network
+
+  - from: gateway
+    to: eu-lb
+    type: network
+
+  - from: us-lb
+    to: us-api-1
+    type: network
+
+  - from: us-lb
+    to: us-api-2
+    type: network
+
+  - from: us-api-1
+    to: us-db
+    type: data
+
+  - from: us-api-2
+    to: us-cache
+    type: data
+
+  - from: us-api-2
+    to: us-db
+    type: data
+
+  - from: eu-lb
+    to: eu-api-1
+    type: network
+
+  - from: eu-api-1
+    to: eu-db
+    type: data
+
+  - from: us-db
+    to: eu-db
+    label: replication
+    type: data
+    directed: false
+
+groups:
+  - id: us-east
+    label: "US East (us-east-1)"
+    color: "#4299e1"
+    nodes: [us-lb, us-api-1, us-api-2, us-cache, us-db]
+
+  - id: eu-west
+    label: "EU West (eu-west-1)"
+    color: "#48bb78"
+    nodes: [eu-lb, eu-api-1, eu-db]

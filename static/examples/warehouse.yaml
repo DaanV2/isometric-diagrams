@@ -1,0 +1,125 @@
+title: "Cargo Flow: Port to Warehouse"
+type: warehouse
+description: "Tracking cargo through docks, trucks, and warehouse zones"
+
+settings:
+  theme: dark
+  tileSize: 64
+  showGrid: true
+
+nodes:
+  - id: ship
+    label: "Container Ship"
+    type: dock
+    description: "MSC Gülsün"
+    position: { x: 0, y: 0 }
+
+  - id: dock-a
+    label: "Dock A"
+    type: dock
+    description: "Unloading bay"
+    position: { x: 2, y: 0 }
+
+  - id: dock-b
+    label: "Dock B"
+    type: dock
+    description: "Unloading bay"
+    position: { x: 2, y: 2 }
+
+  - id: customs
+    label: "Customs"
+    type: service
+    description: "Inspection"
+    position: { x: 4, y: 1 }
+
+  - id: truck-1
+    label: "Truck 1"
+    type: truck
+    position: { x: 6, y: 0 }
+
+  - id: truck-2
+    label: "Truck 2"
+    type: truck
+    position: { x: 6, y: 2 }
+
+  - id: wh-a
+    label: "Zone A"
+    type: warehouse
+    description: "Cold storage"
+    position: { x: 8, y: 0 }
+
+  - id: wh-b
+    label: "Zone B"
+    type: warehouse
+    description: "Dry goods"
+    position: { x: 8, y: 2 }
+
+  - id: wh-c
+    label: "Zone C"
+    type: warehouse
+    description: "Hazmat"
+    position: { x: 8, y: 4 }
+
+  - id: dispatch
+    label: "Dispatch"
+    type: service
+    description: "Last-mile hub"
+    position: { x: 10, y: 2 }
+
+edges:
+  - from: ship
+    to: dock-a
+    label: unload
+    type: flow
+
+  - from: ship
+    to: dock-b
+    label: unload
+    type: flow
+
+  - from: dock-a
+    to: customs
+    type: flow
+
+  - from: dock-b
+    to: customs
+    type: flow
+
+  - from: customs
+    to: truck-1
+    type: flow
+
+  - from: customs
+    to: truck-2
+    type: flow
+
+  - from: truck-1
+    to: wh-a
+    type: flow
+
+  - from: truck-2
+    to: wh-b
+    type: flow
+
+  - from: wh-a
+    to: dispatch
+    type: flow
+
+  - from: wh-b
+    to: dispatch
+    type: flow
+
+  - from: wh-c
+    to: dispatch
+    type: flow
+
+groups:
+  - id: port
+    label: "Port Area"
+    color: "#4299e1"
+    nodes: [ship, dock-a, dock-b, customs]
+
+  - id: warehouse
+    label: "Warehouse Complex"
+    color: "#ed8936"
+    nodes: [wh-a, wh-b, wh-c]
