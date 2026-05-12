@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DiagramSpec, DiagramNode } from '../types/diagram.js';
+	import type { DiagramSpec } from '../types/diagram.js';
 	import { boundingBox, isoToScreen } from '../renderer/isometric.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
@@ -18,7 +18,6 @@
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
 	const tileSize = $derived(spec.settings?.tileSize ?? 64);
-	const padding = $derived((spec.settings?.padding ?? 2) * tileSize);
 	const showGrid = $derived(spec.settings?.showGrid ?? true);
 
 	/** Bounding box of all node positions in screen space */
@@ -118,13 +117,13 @@
 	<g class="content" style="transform: translate({offsetX}px, {offsetY}px)">
 		<!-- Grid lines -->
 		{#if showGrid}
-			{#each gridLines() as d}
+			{#each gridLines() as d, i (i)}
 				<path {d} fill="none" stroke={themeVars.gridLine} stroke-width="0.5" opacity="0.5" />
 			{/each}
 		{/if}
 
 		<!-- Group highlights -->
-		{#each groupPolygons() as grp}
+		{#each groupPolygons() as grp (grp?.id)}
 			{#if grp}
 				<rect
 					x={grp.minX}
@@ -191,7 +190,7 @@
 			{#if sel.description}<p>{sel.description}</p>{/if}
 			{#if sel.meta}
 				<dl>
-					{#each Object.entries(sel.meta) as [k, v]}
+					{#each Object.entries(sel.meta) as [k, v] (k)}
 						<dt>{k}</dt>
 						<dd>{v}</dd>
 					{/each}

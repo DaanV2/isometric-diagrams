@@ -59,7 +59,6 @@ export function boxPaths(
 	h: number,
 	cfg: IsoConfig
 ): { top: string; left: string; right: string } {
-	const tw = cfg.tileSize * 2;
 	const th = cfg.tileSize;
 	const hw = cfg.tileSize; // half tile width
 	const hh = cfg.tileSize / 2; // half tile height
