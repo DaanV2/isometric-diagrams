@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      svelte:
+        patterns:
+          - svelte
+          - "@sveltejs/*"
+      testing:
+        patterns:
+          - "@playwright/test"
+          - playwright
+      types:
+        patterns:
+          - "@types/*"
+      build-tools:
+        patterns:
+          - vite
+          - typescript
+          - svelte-check
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
