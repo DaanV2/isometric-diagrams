@@ -17,6 +17,7 @@
 	let diagramWidth = $state(860);
 	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
+	let showGrid = $state(true);
 
 	async function loadExample(file: string) {
 		try {
@@ -80,6 +81,14 @@
 		>
 			{editorVisible ? '‹ Hide' : '› Edit YAML'}
 		</button>
+		<button
+			class="toggle-grid"
+			onclick={() => (showGrid = !showGrid)}
+			aria-pressed={showGrid}
+			title={showGrid ? 'Hide grid' : 'Show grid'}
+		>
+			{showGrid ? '⊞ Grid' : '⊟ Grid'}
+		</button>
 	</header>
 
 	<main>
@@ -108,7 +117,7 @@
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
 				<div class="diagram-wrapper" style="position: relative;">
-					<IsometricDiagram {spec} width={diagramWidth} height={diagramHeight} />
+					<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
 				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
@@ -204,6 +213,26 @@
 	.toggle-editor:hover {
 		background: #21262d;
 		color: #e6edf3;
+	}
+
+	.toggle-grid {
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid #30363d;
+		background: transparent;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.toggle-grid:hover {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.toggle-grid[aria-pressed='true'] {
+		background: #1b2a1b;
+		border-color: #3fb950;
+		color: #3fb950;
 	}
 
 	/* ── Main layout ──────────────────────── */
