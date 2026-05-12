@@ -22,16 +22,16 @@
 		floorTilePath(tile.position.x, tile.position.y, gz, w, d, { tileSize })
 	);
 
-	const labelPos = $derived(() => {
-		if (!tile.label) return null;
-		// Place the label at the visual centre of the area
-		return isoToScreen(
-			tile.position.x + (w - 1) / 2,
-			tile.position.y + (d - 1) / 2,
-			gz,
-			{ tileSize }
-		);
-	});
+	const labelPos = $derived(
+		tile.label
+			? isoToScreen(
+					tile.position.x + (w - 1) / 2,
+					tile.position.y + (d - 1) / 2,
+					gz,
+					{ tileSize }
+				)
+			: null
+	);
 </script>
 
 <g
@@ -47,11 +47,10 @@
 		opacity={tile.style?.opacity ?? 0.6}
 	/>
 	{#if tile.label}
-		{@const pos = labelPos()}
-		{#if pos}
+		{#if labelPos}
 			<text
-				x={pos.x}
-				y={pos.y}
+				x={labelPos.x}
+				y={labelPos.y}
 				text-anchor="middle"
 				dominant-baseline="middle"
 				class="floor-tile-label"

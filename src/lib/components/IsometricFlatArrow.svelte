@@ -19,20 +19,22 @@
 		flatArrowPath(arrow.from.x, arrow.from.y, arrow.to.x, arrow.to.y, z, { tileSize })
 	);
 
-	const arrowPts = $derived(() => {
-		if (!directed) return '';
-		return flatArrowHead(arrow.from.x, arrow.from.y, arrow.to.x, arrow.to.y, z, { tileSize });
-	});
+	const arrowPts = $derived(
+		directed
+			? flatArrowHead(arrow.from.x, arrow.from.y, arrow.to.x, arrow.to.y, z, { tileSize })
+			: ''
+	);
 
-	const midLabel = $derived(() => {
-		if (!arrow.label) return null;
-		return isoToScreen(
-			(arrow.from.x + arrow.to.x) / 2,
-			(arrow.from.y + arrow.to.y) / 2,
-			z,
-			{ tileSize }
-		);
-	});
+	const midLabel = $derived(
+		arrow.label
+			? isoToScreen(
+					(arrow.from.x + arrow.to.x) / 2,
+					(arrow.from.y + arrow.to.y) / 2,
+					z,
+					{ tileSize }
+				)
+			: null
+	);
 </script>
 
 <g
@@ -47,14 +49,13 @@
 		opacity={arrow.style?.opacity ?? 0.9}
 	/>
 	{#if directed}
-		<polygon points={arrowPts()} fill={colour} opacity={arrow.style?.opacity ?? 0.9} />
+		<polygon points={arrowPts} fill={colour} opacity={arrow.style?.opacity ?? 0.9} />
 	{/if}
 	{#if arrow.label}
-		{@const pos = midLabel()}
-		{#if pos}
+		{#if midLabel}
 			<text
-				x={pos.x}
-				y={pos.y - 6}
+				x={midLabel.x}
+				y={midLabel.y - 6}
 				text-anchor="middle"
 				dominant-baseline="middle"
 				class="flat-arrow-label"
