@@ -64,11 +64,10 @@
 	>
 		<path
 			d={path()}
+			class={edge.type === 'dependency' ? 'edge-path edge-path--dashed' : 'edge-path'}
 			fill="none"
 			stroke={colour}
 			stroke-width="1.5"
-			stroke-dasharray={edge.type === 'dependency' ? '5,3' : undefined}
-			opacity="0.85"
 		/>
 		{#if directed}
 			<polygon points={arrow()} fill={colour} opacity="0.85" />
@@ -92,6 +91,34 @@
 {/if}
 
 <style>
+	.edge-path {
+		opacity: 0.85;
+		stroke-dasharray: 1000;
+		stroke-dashoffset: 1000;
+		animation: draw-line 0.8s ease-out forwards;
+	}
+
+	.edge-path--dashed {
+		stroke-dasharray: 5 3;
+		stroke-dashoffset: 0;
+		animation: fade-in-edge 0.6s ease-out forwards;
+	}
+
+	@keyframes draw-line {
+		to {
+			stroke-dashoffset: 0;
+		}
+	}
+
+	@keyframes fade-in-edge {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 0.85;
+		}
+	}
+
 	.edge-label {
 		font-family: system-ui, sans-serif;
 		font-size: 9px;
