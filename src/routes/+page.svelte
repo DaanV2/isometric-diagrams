@@ -2,6 +2,7 @@
 	import { parseYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
+	import { base } from '$app/paths';
 
 	// ── Example definitions ──────────────────────────────────────
 	const EXAMPLES: { name: string; file: string }[] = [
@@ -22,7 +23,7 @@
 
 	async function loadExample(file: string) {
 		try {
-			const res = await fetch(`/examples/${file}`);
+			const res = await fetch(`${base}/examples/${file}`);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const text = await res.text();
 			editorYaml = text;

@@ -23,6 +23,7 @@ An interactive isometric diagram viewer built with **Svelte 5** and **SvelteKit*
 | [`networking.yaml`](static/examples/networking.yaml) | Multi-region AWS microservices architecture |
 | [`warehouse.yaml`](static/examples/warehouse.yaml) | Cargo flow from port → trucks → warehouse |
 | [`simple-flow.yaml`](static/examples/simple-flow.yaml) | E-commerce order processing flow |
+| [`floor-plan.yaml`](static/examples/floor-plan.yaml) | Warehouse floor plan with flat arrows and floor zones |
 
 ## Getting started
 
