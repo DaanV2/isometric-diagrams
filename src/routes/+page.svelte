@@ -95,7 +95,7 @@
 
 	<main>
 		{#if editorVisible}
-			<section class="editor-panel" aria-label="YAML editor">
+			<section class="editor-panel" class:has-error={!!parseError} aria-label="YAML editor">
 				<div class="editor-toolbar">
 					<span class="editor-label">YAML Spec</span>
 					<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
@@ -121,9 +121,11 @@
 
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
-				<div class="diagram-wrapper" style="position: relative;">
-					<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
-				</div>
+				{#key spec}
+					<div class="diagram-wrapper animate-diagram-in" style="position: relative;">
+						<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
+					</div>
+				{/key}
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
 			{:else}
@@ -320,6 +322,17 @@
 		font-size: 1.4rem;
 		flex-shrink: 0;
 		line-height: 1.3;
+		animation: pulse-icon 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse-icon {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.15);
+		}
 	}
 
 	.animate-pop {
@@ -334,6 +347,21 @@
 		100% {
 			scale: 1;
 			opacity: 1;
+		}
+	}
+
+	.editor-panel.has-error {
+		border-right-color: #ef4444;
+		animation: error-border-pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes error-border-pulse {
+		0%,
+		100% {
+			border-right-color: #ef4444;
+		}
+		50% {
+			border-right-color: #7f1d1d;
 		}
 	}
 
@@ -353,6 +381,21 @@
 		border-radius: 8px;
 		overflow: hidden;
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+	}
+
+	.animate-diagram-in {
+		animation: diagram-appear 0.4s ease-out;
+	}
+
+	@keyframes diagram-appear {
+		from {
+			opacity: 0.7;
+			transform: scale(0.99);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 
 	.placeholder {

@@ -43,6 +43,7 @@
 >
 	<path
 		d={path}
+		class="flat-arrow-path"
 		fill="none"
 		stroke={colour}
 		stroke-width="2"
@@ -68,6 +69,18 @@
 </g>
 
 <style>
+	.flat-arrow-path {
+		stroke-dasharray: 1000;
+		stroke-dashoffset: 1000;
+		animation: draw-flat-arrow 0.8s ease-out forwards;
+	}
+
+	@keyframes draw-flat-arrow {
+		to {
+			stroke-dashoffset: 0;
+		}
+	}
+
 	.flat-arrow-label {
 		font-family: system-ui, sans-serif;
 		font-size: 9px;

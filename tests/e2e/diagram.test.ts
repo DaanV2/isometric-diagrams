@@ -116,6 +116,60 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(alert).toHaveClass(/animate-pop/);
 	});
 
+	test('editor panel gets has-error class when YAML is invalid', async ({ page }) => {
+		await page.goto('/');
+		const editor = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(editor).toBeVisible({ timeout: 8_000 });
+
+		await editor.fill('title: "broken"\nnodes: not-an-array');
+		await editor.dispatchEvent('input');
+
+		await expect(page.getByRole('alert')).toBeVisible({ timeout: 5_000 });
+
+		const editorPanel = page.locator('section[aria-label="YAML editor"]');
+		await expect(editorPanel).toHaveClass(/has-error/);
+	});
+
+	test('editor panel has-error class is removed when YAML becomes valid', async ({ page }) => {
+		await page.goto('/');
+		const editor = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(editor).toBeVisible({ timeout: 8_000 });
+
+		await editor.fill('title: "broken"\nnodes: not-an-array');
+		await editor.dispatchEvent('input');
+		await expect(page.getByRole('alert')).toBeVisible({ timeout: 5_000 });
+
+		const editorPanel = page.locator('section[aria-label="YAML editor"]');
+		await expect(editorPanel).toHaveClass(/has-error/);
+
+		// Fix the YAML
+		await editor.fill('title: "fixed"\nnodes:\n  - id: a\n    label: A\n    position: {x: 0, y: 0}');
+		await editor.dispatchEvent('input');
+
+		await expect(editorPanel).not.toHaveClass(/has-error/, { timeout: 5_000 });
+	});
+
+	test('diagram wrapper has animate-diagram-in class for entrance animation', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		const wrapper = page.locator('.diagram-wrapper');
+		await expect(wrapper).toHaveClass(/animate-diagram-in/);
+	});
+
+	test('edge paths have animation class', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		const edgePaths = page.locator('.iso-edge .edge-path');
+		const count = await edgePaths.count();
+		expect(count).toBeGreaterThan(0);
+
+		// Verify the class is actually present on each path
+		const firstPath = edgePaths.first();
+		await expect(firstPath).toHaveClass(/edge-path/);
+	});
+
 	test('SVG contains edges connecting nodes', async ({ page }) => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
