@@ -44,7 +44,7 @@ jobs:
           path: build
 
   deploy:
-    needs: build
+    needs: build-pages
     runs-on: ubuntu-latest
     name: 🚚 Deploy pages
     environment:
