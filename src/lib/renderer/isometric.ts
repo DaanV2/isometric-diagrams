@@ -51,17 +51,23 @@ export function tilePath(gx: number, gy: number, gz: number, cfg: IsoConfig): st
 /**
  * Build SVG path data for the top face, left face and right face of an
  * isometric box (cube) at grid position (gx, gy, gz) with height `h` tiles.
+ *
+ * `padding` (0–1) shrinks the block footprint relative to the tile size so
+ * there is a visible gap between adjacent blocks and the grid edges.
+ * A value of 0.1 means 10% inset on every side.
  */
 export function boxPaths(
 	gx: number,
 	gy: number,
 	gz: number,
 	h: number,
-	cfg: IsoConfig
+	cfg: IsoConfig,
+	padding = 0.1
 ): { top: string; left: string; right: string } {
 	const th = cfg.tileSize;
-	const hw = cfg.tileSize; // half tile width
-	const hh = cfg.tileSize / 2; // half tile height
+	const scale = 1 - padding;
+	const hw = cfg.tileSize * scale; // half tile width (inset by padding)
+	const hh = (cfg.tileSize / 2) * scale; // half tile height (inset by padding)
 	const pixelH = h * th; // height in pixels
 
 	// Centre of the top tile
@@ -71,21 +77,20 @@ export function boxPaths(
 	const top = `M ${x},${y - hh} L ${x + hw},${y} L ${x},${y + hh} L ${x - hw},${y} Z`;
 
 	// Left face (parallelogram going down-left)
-	const leftTop = isoToScreen(gx, gy, gz + h, cfg);
 	const left = [
-		`M ${leftTop.x - hw},${leftTop.y}`,
-		`L ${leftTop.x},${leftTop.y + hh}`,
-		`L ${leftTop.x},${leftTop.y + hh + pixelH}`,
-		`L ${leftTop.x - hw},${leftTop.y + pixelH}`,
+		`M ${x - hw},${y}`,
+		`L ${x},${y + hh}`,
+		`L ${x},${y + hh + pixelH}`,
+		`L ${x - hw},${y + pixelH}`,
 		'Z'
 	].join(' ');
 
 	// Right face (parallelogram going down-right)
 	const right = [
-		`M ${leftTop.x},${leftTop.y + hh}`,
-		`L ${leftTop.x + hw},${leftTop.y}`,
-		`L ${leftTop.x + hw},${leftTop.y + pixelH}`,
-		`L ${leftTop.x},${leftTop.y + hh + pixelH}`,
+		`M ${x},${y + hh}`,
+		`L ${x + hw},${y}`,
+		`L ${x + hw},${y + pixelH}`,
+		`L ${x},${y + hh + pixelH}`,
 		'Z'
 	].join(' ');
 
