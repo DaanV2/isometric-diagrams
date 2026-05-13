@@ -1,0 +1,102 @@
+title: "Warehouse Floor Plan"
+type: warehouse
+description: "Flat arrows and floor zones on the ground plane"
+
+settings:
+  theme: dark
+  tileSize: 64
+  showGrid: true
+
+floorTiles:
+  - id: zone-receive
+    position: { x: 0, y: 0 }
+    width: 3
+    depth: 3
+    label: "Receiving"
+    style:
+      fillColor: "rgba(66,153,225,0.18)"
+      strokeColor: "#4299e1"
+
+  - id: zone-storage
+    position: { x: 5, y: 0 }
+    width: 4
+    depth: 4
+    label: "Storage"
+    style:
+      fillColor: "rgba(72,187,120,0.18)"
+      strokeColor: "#48bb78"
+
+  - id: zone-dispatch
+    position: { x: 11, y: 1 }
+    width: 3
+    depth: 3
+    label: "Dispatch"
+    style:
+      fillColor: "rgba(237,137,54,0.18)"
+      strokeColor: "#ed8936"
+
+flatArrows:
+  - id: flow-a
+    from: { x: 1, y: 1 }
+    to: { x: 6, y: 1 }
+    label: "inbound"
+    style:
+      color: "#4299e1"
+
+  - id: flow-b
+    from: { x: 7, y: 3 }
+    to: { x: 12, y: 2 }
+    label: "outbound"
+    style:
+      color: "#ed8936"
+
+  - id: flow-c
+    from: { x: 6, y: 1 }
+    to: { x: 6, y: 3 }
+    directed: false
+    style:
+      color: "#48bb78"
+
+nodes:
+  - id: dock
+    label: "Dock"
+    type: dock
+    position: { x: 1, y: 1 }
+
+  - id: sorter
+    label: "Sorter"
+    type: service
+    description: "Automated belt"
+    position: { x: 6, y: 1 }
+
+  - id: shelf-a
+    label: "Shelf A"
+    type: storage
+    position: { x: 6, y: 3 }
+
+  - id: shelf-b
+    label: "Shelf B"
+    type: storage
+    position: { x: 8, y: 2 }
+
+  - id: dispatch
+    label: "Dispatch"
+    type: truck
+    position: { x: 12, y: 2 }
+
+edges:
+  - from: sorter
+    to: shelf-a
+    type: flow
+
+  - from: sorter
+    to: shelf-b
+    type: flow
+
+  - from: shelf-a
+    to: dispatch
+    type: flow
+
+  - from: shelf-b
+    to: dispatch
+    type: flow

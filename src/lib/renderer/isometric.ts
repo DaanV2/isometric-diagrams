@@ -139,6 +139,78 @@ export function arrowHead(
 	].join(' ');
 }
 
+/**
+ * Compute the SVG path for a straight flat arrow from (fromX, fromY) to (toX, toY)
+ * lying on the ground at the given z level.
+ */
+export function flatArrowPath(
+	fromX: number,
+	fromY: number,
+	toX: number,
+	toY: number,
+	z: number,
+	cfg: IsoConfig
+): string {
+	const from = isoToScreen(fromX, fromY, z, cfg);
+	const to = isoToScreen(toX, toY, z, cfg);
+	return `M ${from.x},${from.y} L ${to.x},${to.y}`;
+}
+
+/**
+ * Compute an SVG arrowhead polygon for a flat arrow pointing from (fromX, fromY)
+ * to (toX, toY) on the ground at the given z level.
+ * Returns a `points` string for a <polygon> element.
+ */
+export function flatArrowHead(
+	fromX: number,
+	fromY: number,
+	toX: number,
+	toY: number,
+	z: number,
+	cfg: IsoConfig
+): string {
+	const tip = isoToScreen(toX, toY, z, cfg);
+	const base = isoToScreen(fromX, fromY, z, cfg);
+	const dx = tip.x - base.x;
+	const dy = tip.y - base.y;
+	const len = Math.sqrt(dx * dx + dy * dy) || 1;
+	const ux = dx / len;
+	const uy = dy / len;
+	const size = 10;
+	const w = 5;
+	return [
+		`${tip.x},${tip.y}`,
+		`${tip.x - ux * size - uy * w},${tip.y - uy * size + ux * w}`,
+		`${tip.x - ux * size + uy * w},${tip.y - uy * size - ux * w}`
+	].join(' ');
+}
+
+/**
+ * Build the SVG path for a flat w × d tile area on the isometric ground.
+ * `gx`, `gy` are the top corner grid position; `w` tiles extend along x, `d` along y.
+ * The result is a diamond-shaped quadrilateral outline of the area.
+ */
+export function floorTilePath(
+	gx: number,
+	gy: number,
+	gz: number,
+	w: number,
+	d: number,
+	cfg: IsoConfig
+): string {
+	const hh = cfg.tileSize / 2;
+	const hw = cfg.tileSize;
+	const topCenter = isoToScreen(gx, gy, gz, cfg);
+	const rightCenter = isoToScreen(gx + w - 1, gy, gz, cfg);
+	const bottomCenter = isoToScreen(gx + w - 1, gy + d - 1, gz, cfg);
+	const leftCenter = isoToScreen(gx, gy + d - 1, gz, cfg);
+	const top = { x: topCenter.x, y: topCenter.y - hh };
+	const right = { x: rightCenter.x + hw, y: rightCenter.y };
+	const bottom = { x: bottomCenter.x, y: bottomCenter.y + hh };
+	const left = { x: leftCenter.x - hw, y: leftCenter.y };
+	return `M ${top.x},${top.y} L ${right.x},${right.y} L ${bottom.x},${bottom.y} L ${left.x},${left.y} Z`;
+}
+
 /** Compute the bounding box (in screen space) for a set of grid positions. */
 export function boundingBox(
 	positions: Array<{ x: number; y: number; z?: number }>,

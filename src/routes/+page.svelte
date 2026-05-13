@@ -8,7 +8,8 @@
 	const EXAMPLES: { name: string; file: string }[] = [
 		{ name: 'Multi-Region Network', file: 'networking.yaml' },
 		{ name: 'Cargo Flow', file: 'warehouse.yaml' },
-		{ name: 'Order Flow', file: 'simple-flow.yaml' }
+		{ name: 'Order Flow', file: 'simple-flow.yaml' },
+		{ name: 'Floor Plan', file: 'floor-plan.yaml' }
 	];
 
 	let editorYaml = $state('');
@@ -21,6 +22,7 @@
 	let editorMode = $state<'yaml' | 'ui'>('yaml');
 	/** Incrementing this key forces UIEditor to reinitialise from the current spec. */
 	let uiEditorKey = $state(0);
+	let showGrid = $state(true);
 
 	async function loadExample(file: string) {
 		try {
@@ -110,6 +112,15 @@
 		>
 			{editorVisible ? '‹ Hide' : '› Edit YAML'}
 		</button>
+		<button
+			class="toggle-grid"
+			onclick={() => (showGrid = !showGrid)}
+			aria-pressed={showGrid}
+			aria-label="Toggle grid"
+			title={showGrid ? 'Hide grid' : 'Show grid'}
+		>
+			{showGrid ? '⊞ Grid' : '⊟ Grid'}
+		</button>
 	</header>
 
 	<main>
@@ -162,10 +173,13 @@
 				{/if}
 
 				{#if parseError}
-					<div class="error-banner" role="alert">
-						<strong>Parse error:</strong>
-						{parseError}
-					</div>
+					{#key parseError}
+						<div class="error-banner animate-pop" role="alert">
+							<span class="error-icon" aria-hidden="true">⚠</span>
+							<strong>Parse error:</strong>
+							{parseError}
+						</div>
+					{/key}
 				{/if}
 			</section>
 		{/if}
@@ -173,12 +187,14 @@
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
 				<div class="diagram-wrapper" style="position: relative;">
-					<IsometricDiagram {spec} width={diagramWidth} height={diagramHeight} />
+					<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
 				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
 			{:else}
-				<div class="placeholder error">Fix the YAML to see the diagram.</div>
+				{#key parseError}
+					<div class="placeholder error animate-pop">Fix the YAML to see the diagram.</div>
+				{/key}
 			{/if}
 		</section>
 	</main>
@@ -269,6 +285,26 @@
 	.toggle-editor:hover {
 		background: #21262d;
 		color: #e6edf3;
+	}
+
+	.toggle-grid {
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid #30363d;
+		background: transparent;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.toggle-grid:hover {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.toggle-grid[aria-pressed='true'] {
+		background: #1b2a1b;
+		border-color: #3fb950;
+		color: #3fb950;
 	}
 
 	/* ── Main layout ──────────────────────── */
@@ -367,11 +403,37 @@
 	}
 
 	.error-banner {
-		padding: 8px 10px;
-		background: #3b0a0a;
-		border-top: 1px solid #6b1a1a;
-		color: #fca5a5;
-		font-size: 11px;
+		padding: 1em;
+		background: #7f1d1d;
+		border-top: 2px solid #ef4444;
+		color: #fecaca;
+		font-size: 1.2rem;
+		line-height: 1.5;
+		border-radius: 0 0 8px 8px;
+		display: flex;
+		gap: 0.5em;
+		align-items: flex-start;
+	}
+
+	.error-icon {
+		font-size: 1.4rem;
+		flex-shrink: 0;
+		line-height: 1.3;
+	}
+
+	.animate-pop {
+		animation: pop 0.5s ease-out;
+	}
+
+	@keyframes pop {
+		0% {
+			scale: 0.85;
+			opacity: 0;
+		}
+		100% {
+			scale: 1;
+			opacity: 1;
+		}
 	}
 
 	/* ── Diagram panel ────────────────────── */
@@ -398,5 +460,7 @@
 	}
 	.placeholder.error {
 		color: #f87171;
+		font-size: 1.1rem;
+		font-weight: 600;
 	}
 </style>

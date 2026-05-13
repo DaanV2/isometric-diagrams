@@ -4,26 +4,41 @@
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
 	import IsometricEdge from './IsometricEdge.svelte';
+	import IsometricFlatArrow from './IsometricFlatArrow.svelte';
+	import IsometricFloorTile from './IsometricFloorTile.svelte';
 
 	interface Props {
 		spec: DiagramSpec;
 		/** Override theme. If undefined, uses spec.settings.theme (default dark). */
 		theme?: 'light' | 'dark';
+		/** Override grid visibility. If undefined, uses spec.settings.showGrid (default true). */
+		showGrid?: boolean;
 		width?: number;
 		height?: number;
 	}
 
-	let { spec, theme, width = 900, height = 600 }: Props = $props();
+	let { spec, theme, showGrid: showGridProp, width = 900, height = 600 }: Props = $props();
 
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
 	const tileSize = $derived(spec.settings?.tileSize ?? 64);
-	const showGrid = $derived(spec.settings?.showGrid ?? true);
+	const showGrid = $derived(showGridProp ?? spec.settings?.showGrid ?? true);
 
 	/** Bounding box of all node positions in screen space */
 	const bbox = $derived(
 		boundingBox(
-			spec.nodes.map((n) => ({ x: n.position.x, y: n.position.y, z: n.position.z ?? 0 })),
+			[
+				...spec.nodes.map((n) => ({ x: n.position.x, y: n.position.y, z: n.position.z ?? 0 })),
+				...(spec.floorTiles ?? []).map((t) => ({
+					x: t.position.x + (t.width ?? 1) - 1,
+					y: t.position.y + (t.depth ?? 1) - 1,
+					z: t.position.z ?? 0
+				})),
+				...(spec.flatArrows ?? []).flatMap((a) => [
+					{ x: a.from.x, y: a.from.y, z: a.from.z ?? 0 },
+					{ x: a.to.x, y: a.to.y, z: a.to.z ?? 0 }
+				])
+			],
 			{ tileSize }
 		)
 	);
@@ -99,6 +114,7 @@
 	xmlns="http://www.w3.org/2000/svg"
 	class="iso-diagram"
 	data-diagram-title={spec.title}
+	data-show-grid={showGrid}
 	style="
 		background: {themeVars.background};
 		--background: {themeVars.background};
@@ -145,6 +161,16 @@
 					{grp.label}
 				</text>
 			{/if}
+		{/each}
+
+		<!-- Floor tiles (drawn below everything else) -->
+		{#each spec.floorTiles ?? [] as tile (tile.id ?? `${tile.position.x}-${tile.position.y}`)}
+			<IsometricFloorTile {tile} {tileSize} offsetX={0} offsetY={0} />
+		{/each}
+
+		<!-- Flat arrows (on the ground, above floor tiles, below regular edges) -->
+		{#each spec.flatArrows ?? [] as arrow (arrow.id ?? `${arrow.from.x}-${arrow.from.y}-${arrow.to.x}-${arrow.to.y}`)}
+			<IsometricFlatArrow {arrow} {tileSize} offsetX={0} offsetY={0} />
 		{/each}
 
 		<!-- Edges (drawn below nodes) -->

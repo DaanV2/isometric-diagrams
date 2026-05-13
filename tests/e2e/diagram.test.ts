@@ -103,6 +103,19 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(page.getByRole('alert')).toContainText('Parse error');
 	});
 
+	test('error banner has the animate-pop class for visibility', async ({ page }) => {
+		await page.goto('/');
+		const editor = page.locator('textarea[aria-label="YAML diagram specification"]');
+		await expect(editor).toBeVisible({ timeout: 8_000 });
+
+		await editor.fill('title: "broken"\nnodes: not-an-array');
+		await editor.dispatchEvent('input');
+
+		const alert = page.getByRole('alert');
+		await expect(alert).toBeVisible({ timeout: 5_000 });
+		await expect(alert).toHaveClass(/animate-pop/);
+	});
+
 	test('SVG contains edges connecting nodes', async ({ page }) => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
@@ -122,6 +135,55 @@ test.describe('Isometric Diagrams App', () => {
 
 		// A status region should appear with the node info
 		await expect(page.getByRole('status')).toBeVisible({ timeout: 5_000 });
+	});
+
+	test('grid toggle button is visible in the header', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
+		await expect(gridBtn).toBeVisible();
+	});
+
+	test('grid is shown by default', async ({ page }) => {
+		await page.goto('/');
+		const svg = page.locator('svg.iso-diagram');
+		await expect(svg).toBeVisible({ timeout: 10_000 });
+
+		// data-show-grid attribute should be "true" by default
+		await expect(svg).toHaveAttribute('data-show-grid', 'true');
+	});
+
+	test('clicking the grid toggle hides and shows the grid', async ({ page }) => {
+		await page.goto('/');
+		const svg = page.locator('svg.iso-diagram');
+		await expect(svg).toBeVisible({ timeout: 10_000 });
+
+		// Grid is on by default
+		await expect(svg).toHaveAttribute('data-show-grid', 'true');
+
+		// Click the grid toggle button to hide the grid
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
+		await gridBtn.click();
+		await expect(svg).toHaveAttribute('data-show-grid', 'false');
+
+		// Click again to show the grid
+		await gridBtn.click();
+		await expect(svg).toHaveAttribute('data-show-grid', 'true');
+	});
+
+	test('grid toggle button reflects pressed state', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForSelector('svg.iso-diagram');
+
+		const gridBtn = page.getByRole('button', { name: 'Toggle grid' });
+
+		// Initially pressed (grid on)
+		await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
+
+		// After click, not pressed (grid off)
+		await gridBtn.click();
+		await expect(gridBtn).toHaveAttribute('aria-pressed', 'false');
 	});
 });
 
