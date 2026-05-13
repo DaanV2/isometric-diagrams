@@ -54,7 +54,7 @@ export function tilePath(gx: number, gy: number, gz: number, cfg: IsoConfig): st
  *
  * `padding` (0–1) shrinks the block footprint relative to the tile size so
  * there is a visible gap between adjacent blocks and the grid edges.
- * A value of 0.1 means 10 % inset on every side.
+ * A value of 0.1 means 10% inset on every side.
  */
 export function boxPaths(
 	gx: number,
