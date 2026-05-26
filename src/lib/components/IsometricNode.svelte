@@ -16,6 +16,8 @@
 
 	const height = 1;
 	const colours = $derived(getNodeColours(node.type));
+	const hasIcon = $derived(Boolean(colours.icon?.trim()));
+	const baseOpacity = $derived(node.style?.opacity ?? 1);
 	const paths = $derived(
 		boxPaths(node.position.x, node.position.y, node.position.z ?? 0, height, { tileSize })
 	);
@@ -25,7 +27,9 @@
 		})
 	);
 	const iconPos = $derived(
-		isoToScreen(node.position.x, node.position.y, (node.position.z ?? 0) + height, { tileSize })
+		isoToScreen(node.position.x, node.position.y, (node.position.z ?? 0) + height * 0.52, {
+			tileSize
+		})
 	);
 
 	const strokeWidth = $derived(selected ? 2.5 : 1.5);
@@ -35,6 +39,10 @@
 	const topFill = $derived(node.style?.fillColor ?? colours.top);
 	const leftFill = $derived(node.style?.color ?? colours.left);
 	const rightFill = $derived(node.style?.color ?? colours.right);
+	const topFillOpacity = $derived(baseOpacity * (hasIcon ? 0.16 : 1));
+	const leftFillOpacity = $derived(baseOpacity * (hasIcon ? 0.2 : 1));
+	const rightFillOpacity = $derived(baseOpacity * (hasIcon ? 0.26 : 1));
+	const highlightOpacity = $derived(hasIcon ? 0.4 : 0);
 
 	function handleClick() {
 		onclick?.(node.id);
@@ -43,6 +51,7 @@
 
 <g
 	class="iso-node"
+	class:has-icon={hasIcon}
 	class:selected
 	data-node-id={node.id}
 	role="button"
@@ -53,24 +62,60 @@
 	style="transform: translate({offsetX}px, {offsetY}px); cursor: pointer;"
 >
 	<!-- Left face -->
-	<path d={paths.left} fill={leftFill} stroke={strokeColour} stroke-width={strokeWidth} />
+	<path
+		d={paths.left}
+		fill={leftFill}
+		fill-opacity={leftFillOpacity}
+		stroke={strokeColour}
+		stroke-width={strokeWidth}
+	/>
 	<!-- Right face -->
-	<path d={paths.right} fill={rightFill} stroke={strokeColour} stroke-width={strokeWidth} />
+	<path
+		d={paths.right}
+		fill={rightFill}
+		fill-opacity={rightFillOpacity}
+		stroke={strokeColour}
+		stroke-width={strokeWidth}
+	/>
 	<!-- Top face -->
-	<path d={paths.top} fill={topFill} stroke={strokeColour} stroke-width={strokeWidth} />
+	<path
+		d={paths.top}
+		fill={topFill}
+		fill-opacity={topFillOpacity}
+		stroke={strokeColour}
+		stroke-width={strokeWidth}
+	/>
+	{#if hasIcon}
+		<path
+			d={paths.top}
+			fill="none"
+			stroke="#ffffff"
+			stroke-opacity={highlightOpacity}
+			stroke-width="1"
+		/>
+		<path
+			d={paths.right}
+			fill="none"
+			stroke="#ffffff"
+			stroke-opacity={highlightOpacity * 0.6}
+			stroke-width="1"
+		/>
+	{/if}
 
-	<!-- Icon in centre of top face -->
-	<text
-		x={iconPos.x}
-		y={iconPos.y - tileSize * 0.15}
-		text-anchor="middle"
-		dominant-baseline="middle"
-		font-size={tileSize * 0.45}
-		class="node-icon"
-		style="pointer-events: none; user-select: none;"
-	>
-		{colours.icon}
-	</text>
+	<!-- Icon in the centre of the box -->
+	{#if hasIcon}
+		<text
+			x={iconPos.x}
+			y={iconPos.y}
+			text-anchor="middle"
+			dominant-baseline="middle"
+			font-size={tileSize * 0.42}
+			class="node-icon"
+			style="pointer-events: none; user-select: none;"
+		>
+			{colours.icon}
+		</text>
+	{/if}
 
 	<!-- Label below the block -->
 	<text
@@ -122,5 +167,8 @@
 	}
 	.node-icon {
 		font-family: system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+		paint-order: stroke fill;
+		stroke: rgba(13, 17, 23, 0.55);
+		stroke-width: 2px;
 	}
 </style>
