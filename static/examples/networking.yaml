@@ -4,9 +4,9 @@ description: "Microservices across two AWS regions with load balancers and datab
 
 settings:
   theme: dark
-  tileSize: 64
+  tileSize: 72
   showGrid: true
-  padding: 2
+  padding: 3
 
 nodes:
   # ── US-EAST region ──────────────────────────────────────────
@@ -60,7 +60,7 @@ nodes:
     label: "Load Balancer"
     type: loadbalancer
     description: "ALB eu-west-1"
-    position: { x: 8, y: 0 }
+    position: { x: 7, y: 1 }
     meta:
       region: eu-west-1
       status: healthy
@@ -78,7 +78,7 @@ nodes:
     label: "Read Replica"
     type: database
     description: "Aurora MySQL"
-    position: { x: 8, y: 4 }
+    position: { x: 7, y: 3 }
     meta:
       region: eu-west-1
       engine: mysql
@@ -88,7 +88,7 @@ nodes:
     label: "CDN"
     type: cloud
     description: "CloudFront"
-    position: { x: 5, y: -2 }
+    position: { x: 5, y: -2, z: 1 }
 
   - id: gateway
     label: "API Gateway"
