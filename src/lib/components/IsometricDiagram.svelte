@@ -100,8 +100,10 @@
 			const pad = tileSize * 1.2;
 			const minX = Math.min(...xs) - pad;
 			const maxX = Math.max(...xs) + pad;
-			const minY = Math.min(...ys) - pad;
-			const maxY = Math.max(...ys) + pad * 0.5;
+			// Subtract tileSize to account for cube height: the top face extends tileSize pixels
+			// above the base screen position, so without this the box clips through cube tops.
+			const minY = Math.min(...ys) - pad - tileSize;
+			const maxY = Math.max(...ys) + tileSize * 0.5 + pad * 0.5;
 			return { id: g.id, label: g.label, color: g.color, minX, minY, maxX, maxY };
 		}).filter(Boolean);
 	});
