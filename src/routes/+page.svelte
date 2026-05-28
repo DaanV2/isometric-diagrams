@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { writable } from 'svelte/store';
 	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import UIEditor from '$lib/components/UIEditor.svelte';
@@ -21,11 +20,8 @@
 	let diagramWidth = $state(860);
 	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
-	/** Controls which editor is active: the raw YAML textarea or the visual UI form.
-	 *  Uses a writable store so template {#if $editorMode} blocks always react in the
-	 *  production static build (Svelte 5 $state signals inside nested {#if} branches
-	 *  may not trigger re-renders after the initial effect run). */
-	const editorMode = writable<'yaml' | 'ui'>('yaml');
+	/** Controls which editor is active: the raw YAML textarea or the visual UI form. */
+	let editorMode = $state<'yaml' | 'ui'>('yaml');
 	/** Incrementing this key forces UIEditor to reinitialise from the current spec. */
 	let uiEditorKey = $state(0);
 	let showGrid = $state(true);
@@ -71,12 +67,12 @@
 	 * need to verify it's valid before switching to UI mode.
 	 */
 	function setEditorMode(mode: 'yaml' | 'ui') {
-		if (mode === $editorMode) return;
+		if (mode === editorMode) return;
 		if (mode === 'ui') {
 			if (!spec) return;
 			uiEditorKey++;
 		}
-		editorMode.set(mode);
+		editorMode = mode;
 	}
 
 	// Load the first example on mount using Svelte 5 effect
@@ -131,40 +127,40 @@
 
 	<main>
 		{#if editorVisible}
-			<section class="editor-panel" aria-label="YAML editor" data-editor-mode={$editorMode}>
+			<section class="editor-panel" aria-label="YAML editor" data-editor-mode={editorMode} class:has-error={!!parseError}>
 				<div class="editor-toolbar">
 					<span class="editor-label">
-						{$editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}
+						{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}
 					</span>
 					<div class="mode-switch" role="group" aria-label="Editor mode">
 						<button
 							class="mode-btn"
-							class:active={$editorMode === 'ui'}
+							class:active={editorMode === 'ui'}
 							onclick={() => setEditorMode('ui')}
-							disabled={!!parseError && $editorMode === 'yaml'}
-							title={parseError && $editorMode === 'yaml'
+							disabled={!!parseError && editorMode === 'yaml'}
+							title={parseError && editorMode === 'yaml'
 								? 'Fix YAML errors to use the visual editor'
 								: 'Switch to visual UI editor'}
-							aria-pressed={$editorMode === 'ui'}
+							aria-pressed={editorMode === 'ui'}
 						>
 							UI
 						</button>
 						<button
 							class="mode-btn"
-							class:active={$editorMode === 'yaml'}
+							class:active={editorMode === 'yaml'}
 							onclick={() => setEditorMode('yaml')}
 							title="Switch to YAML editor"
-							aria-pressed={$editorMode === 'yaml'}
+							aria-pressed={editorMode === 'yaml'}
 						>
 							YAML
 						</button>
 					</div>
-					{#if $editorMode === 'yaml'}
+					{#if editorMode === 'yaml'}
 						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
 					{/if}
 				</div>
 
-				{#if $editorMode === 'yaml'}
+				{#if editorMode === 'yaml'}
 					<textarea
 						class="yaml-editor"
 						bind:value={editorYaml}
@@ -332,6 +328,21 @@
 		border-right: 1px solid #21262d;
 		background: #161b22;
 		overflow: hidden;
+	}
+
+	.editor-panel.has-error {
+		animation: error-border-pulse 1s ease-out;
+		border-right-color: #f87171;
+	}
+
+	@keyframes error-border-pulse {
+		0%,
+		100% {
+			border-right-color: #f87171;
+		}
+		50% {
+			border-right-color: #dc2626;
+		}
 	}
 
 	.editor-toolbar {
