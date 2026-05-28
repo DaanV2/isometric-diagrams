@@ -126,65 +126,69 @@
 	</header>
 
 	<main>
-		{#if editorVisible}
-			<section class="editor-panel" aria-label="YAML editor" data-editor-mode={editorMode} class:has-error={!!parseError}>
-				<div class="editor-toolbar">
-					<span class="editor-label">
-						{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}
-					</span>
-					<div class="mode-switch" role="group" aria-label="Editor mode">
-						<button
-							class="mode-btn"
-							class:active={editorMode === 'ui'}
-							onclick={() => setEditorMode('ui')}
-							disabled={!!parseError && editorMode === 'yaml'}
-							title={parseError && editorMode === 'yaml'
-								? 'Fix YAML errors to use the visual editor'
-								: 'Switch to visual UI editor'}
-							aria-pressed={editorMode === 'ui'}
-						>
-							UI
-						</button>
-						<button
-							class="mode-btn"
-							class:active={editorMode === 'yaml'}
-							onclick={() => setEditorMode('yaml')}
-							title="Switch to YAML editor"
-							aria-pressed={editorMode === 'yaml'}
-						>
-							YAML
-						</button>
-					</div>
-					{#if editorMode === 'yaml'}
-						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
-					{/if}
+		<section
+			class="editor-panel"
+			aria-label="YAML editor"
+			data-editor-mode={editorMode}
+			class:has-error={!!parseError}
+			style:display={editorVisible ? '' : 'none'}
+		>
+			<div class="editor-toolbar">
+				<span class="editor-label">
+					{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}
+				</span>
+				<div class="mode-switch" role="group" aria-label="Editor mode">
+					<button
+						class="mode-btn"
+						class:active={editorMode === 'ui'}
+						onclick={() => setEditorMode('ui')}
+						disabled={!!parseError && editorMode === 'yaml'}
+						title={parseError && editorMode === 'yaml'
+							? 'Fix YAML errors to use the visual editor'
+							: 'Switch to visual UI editor'}
+						aria-pressed={editorMode === 'ui'}
+					>
+						UI
+					</button>
+					<button
+						class="mode-btn"
+						class:active={editorMode === 'yaml'}
+						onclick={() => setEditorMode('yaml')}
+						title="Switch to YAML editor"
+						aria-pressed={editorMode === 'yaml'}
+					>
+						YAML
+					</button>
 				</div>
-
 				{#if editorMode === 'yaml'}
-					<textarea
-						class="yaml-editor"
-						bind:value={editorYaml}
-						oninput={compileYaml}
-						spellcheck={false}
-						aria-label="YAML diagram specification"
-					></textarea>
-				{:else if spec}
-					{#key uiEditorKey}
-						<UIEditor {spec} onchange={handleUIChange} />
-					{/key}
+					<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
 				{/if}
+			</div>
 
-				{#if parseError}
-					{#key parseError}
-						<div class="error-banner animate-pop" role="alert">
-							<span class="error-icon" aria-hidden="true">⚠</span>
-							<strong>Parse error:</strong>
-							{parseError}
-						</div>
-					{/key}
-				{/if}
-			</section>
-		{/if}
+			{#if editorMode === 'yaml'}
+				<textarea
+					class="yaml-editor"
+					bind:value={editorYaml}
+					oninput={compileYaml}
+					spellcheck={false}
+					aria-label="YAML diagram specification"
+				></textarea>
+			{:else if spec}
+				{#key uiEditorKey}
+					<UIEditor {spec} onchange={handleUIChange} />
+				{/key}
+			{/if}
+
+			{#if parseError}
+				{#key parseError}
+					<div class="error-banner animate-pop" role="alert">
+						<span class="error-icon" aria-hidden="true">⚠</span>
+						<strong>Parse error:</strong>
+						{parseError}
+					</div>
+				{/key}
+			{/if}
+		</section>
 
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
