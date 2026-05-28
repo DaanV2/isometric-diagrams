@@ -455,21 +455,6 @@
 		}
 	}
 
-	.editor-panel.has-error {
-		border-right-color: #ef4444;
-		animation: error-border-pulse 2s ease-in-out infinite;
-	}
-
-	@keyframes error-border-pulse {
-		0%,
-		100% {
-			border-right-color: #ef4444;
-		}
-		50% {
-			border-right-color: #7f1d1d;
-		}
-	}
-
 	/* ── Diagram panel ────────────────────── */
 	.diagram-panel {
 		flex: 1;
