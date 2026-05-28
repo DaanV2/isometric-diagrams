@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { parseYaml, ParseError } from '$lib/parser/yaml-parser.js';
+	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
+	import UiEditor from '$lib/components/UiEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
 	import { base } from '$app/paths';
 
@@ -20,6 +21,8 @@
 	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
 	let showGrid = $state(true);
+	/** Current editor mode: 'yaml' shows the raw YAML textarea, 'ui' shows the visual form editor */
+	let editorMode = $state<'ui' | 'yaml'>('yaml');
 
 	async function loadExample(file: string) {
 		try {
@@ -42,6 +45,23 @@
 			parseError = e instanceof ParseError ? e.message : String(e);
 			spec = null;
 		}
+	}
+
+	/** Toggle between 'yaml' and 'ui' editor modes, syncing state across the switch. */
+	function toggleEditorMode() {
+		if (editorMode === 'yaml') {
+			// Switch YAML → UI: spec is already parsed from YAML, nothing extra needed
+			editorMode = 'ui';
+		} else {
+			// Switch UI → YAML: dump current spec back into the YAML string
+			if (spec) editorYaml = dumpYaml(spec);
+			editorMode = 'yaml';
+		}
+	}
+
+	/** Called by UiEditor when the user modifies the diagram in the visual editor. */
+	function handleUiSpecChange(newSpec: DiagramSpec) {
+		spec = newSpec;
 	}
 
 	// Load the first example on mount using Svelte 5 effect
@@ -83,6 +103,16 @@
 		>
 			{editorVisible ? '‹ Hide' : '› Edit YAML'}
 		</button>
+		{#if editorVisible}
+			<button
+				class="switch-mode-btn"
+				onclick={toggleEditorMode}
+				aria-label={editorMode === 'yaml' ? 'Switch to UI editor' : 'Switch to YAML editor'}
+				title={editorMode === 'yaml' ? 'Switch to UI editor' : 'Switch to YAML editor'}
+			>
+				{editorMode === 'yaml' ? '⊞ UI' : '{ } YAML'}
+			</button>
+		{/if}
 		<button
 			class="toggle-grid"
 			onclick={() => (showGrid = !showGrid)}
@@ -96,26 +126,41 @@
 
 	<main>
 		{#if editorVisible}
-			<section class="editor-panel" class:has-error={!!parseError} aria-label="YAML editor">
+			<section
+				class="editor-panel"
+				class:has-error={!!parseError && editorMode === 'yaml'}
+				aria-label={editorMode === 'yaml' ? 'YAML editor' : 'UI editor'}
+			>
 				<div class="editor-toolbar">
-					<span class="editor-label">YAML Spec</span>
-					<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
+					<span class="editor-label">{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}</span>
+					{#if editorMode === 'yaml'}
+						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
+					{/if}
 				</div>
-				<textarea
-					class="yaml-editor"
-					bind:value={editorYaml}
-					oninput={compileYaml}
-					spellcheck={false}
-					aria-label="YAML diagram specification"
-				></textarea>
-				{#if parseError}
-					{#key parseError}
-						<div class="error-banner animate-pop" role="alert">
-							<span class="error-icon" aria-hidden="true">⚠</span>
-							<strong>Parse error:</strong>
-							{parseError}
-						</div>
-					{/key}
+
+				{#if editorMode === 'yaml'}
+					<textarea
+						class="yaml-editor"
+						bind:value={editorYaml}
+						oninput={compileYaml}
+						spellcheck={false}
+						aria-label="YAML diagram specification"
+					></textarea>
+					{#if parseError}
+						{#key parseError}
+							<div class="error-banner animate-pop" role="alert">
+								<span class="error-icon" aria-hidden="true">⚠</span>
+								<strong>Parse error:</strong>
+								{parseError}
+							</div>
+						{/key}
+					{/if}
+				{:else if spec}
+					<UiEditor {spec} onspecchange={handleUiSpecChange} />
+				{:else}
+					<div class="ui-editor-placeholder">
+						<span>⚠ Fix the YAML first, then switch to UI editor.</span>
+					</div>
 				{/if}
 			</section>
 		{/if}
@@ -223,6 +268,31 @@
 	.toggle-editor:hover {
 		background: #21262d;
 		color: #e6edf3;
+	}
+
+	.switch-mode-btn {
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid #4299e1;
+		background: #1d3557;
+		color: #90cdf4;
+		cursor: pointer;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.switch-mode-btn:hover {
+		background: #2a4a7f;
+	}
+
+	.ui-editor-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
+		padding: 16px;
+		color: #f87171;
+		font-size: 12px;
+		text-align: center;
 	}
 
 	.toggle-grid {
