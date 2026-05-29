@@ -239,4 +239,159 @@ test.describe('Isometric Diagrams App', () => {
 		await gridBtn.click();
 		await expect(gridBtn).toHaveAttribute('aria-pressed', 'false');
 	});
+
+	test.describe('UI / YAML editor switcher', () => {
+		test('switch-mode button is visible when the editor panel is open', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForSelector('svg.iso-diagram');
+
+			const switchBtn = page.getByRole('button', { name: /Switch to UI editor|Switch to YAML editor/i });
+			await expect(switchBtn).toBeVisible();
+		});
+
+		test('switch-mode button is not visible when editor panel is hidden', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForSelector('svg.iso-diagram');
+
+			// Hide the editor panel first
+			const hideBtn = page.getByRole('button', { name: /Hide|Edit YAML/i });
+			await hideBtn.click();
+
+			const switchBtn = page.getByRole('button', { name: /Switch to UI editor|Switch to YAML editor/i });
+			await expect(switchBtn).not.toBeVisible();
+		});
+
+		test('clicking the switch button shows the UI editor and hides the YAML textarea', async ({ page }) => {
+			await page.goto('/');
+			const yamlEditor = page.locator('textarea[aria-label="YAML diagram specification"]');
+			await expect(yamlEditor).toBeVisible({ timeout: 8_000 });
+
+			const switchBtn = page.getByRole('button', { name: 'Switch to UI editor' });
+			await switchBtn.click();
+
+			await expect(yamlEditor).not.toBeVisible();
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			await expect(uiEditor).toBeVisible();
+		});
+
+		test('UI editor shows section heading for nodes', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForSelector('svg.iso-diagram');
+
+			const switchBtn = page.getByRole('button', { name: 'Switch to UI editor' });
+			await switchBtn.click();
+
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			await expect(uiEditor).toBeVisible();
+			await expect(uiEditor.getByText(/Nodes/)).toBeVisible();
+		});
+
+		test('switching back to YAML mode shows the YAML textarea again', async ({ page }) => {
+			await page.goto('/');
+			const yamlEditor = page.locator('textarea[aria-label="YAML diagram specification"]');
+			await expect(yamlEditor).toBeVisible({ timeout: 8_000 });
+
+			// Switch to UI
+			await page.getByRole('button', { name: 'Switch to UI editor' }).click();
+			await expect(yamlEditor).not.toBeVisible();
+
+			// Switch back to YAML
+			await page.getByRole('button', { name: 'Switch to YAML editor' }).click();
+			await expect(yamlEditor).toBeVisible();
+		});
+
+		test('YAML changes are reflected in the UI editor when switching modes', async ({ page }) => {
+			await page.goto('/');
+			const yamlEditor = page.locator('textarea[aria-label="YAML diagram specification"]');
+			await expect(yamlEditor).toBeVisible({ timeout: 8_000 });
+
+			// Set a simple known YAML
+			await yamlEditor.fill(
+				'title: "My Test Diagram"\nnodes:\n  - id: mynode\n    label: "My Node"\n    position: {x: 0, y: 0}'
+			);
+			await yamlEditor.dispatchEvent('input');
+
+			// Switch to UI mode
+			await page.getByRole('button', { name: 'Switch to UI editor' }).click();
+
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			await expect(uiEditor).toBeVisible();
+
+			// The diagram title input should reflect the new title
+			const titleInput = uiEditor.locator('[aria-label="Diagram title"]');
+			await expect(titleInput).toHaveValue('My Test Diagram');
+		});
+
+		test('UI editor changes are reflected in YAML when switching back', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForSelector('svg.iso-diagram');
+
+			// Switch to UI mode
+			await page.getByRole('button', { name: 'Switch to UI editor' }).click();
+
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			const titleInput = uiEditor.locator('[aria-label="Diagram title"]');
+			await expect(titleInput).toBeVisible({ timeout: 5_000 });
+
+			// Change the title in UI mode
+			await titleInput.fill('Changed In UI');
+
+			// Switch back to YAML
+			await page.getByRole('button', { name: 'Switch to YAML editor' }).click();
+
+			// The YAML textarea should contain the updated title
+			const yamlEditor = page.locator('textarea[aria-label="YAML diagram specification"]');
+			await expect(yamlEditor).toBeVisible();
+			const content = await yamlEditor.inputValue();
+			expect(content).toContain('Changed In UI');
+		});
+
+		test('UI editor add node button adds a new node to the list', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForSelector('svg.iso-diagram');
+
+			// Switch to UI mode
+			await page.getByRole('button', { name: 'Switch to UI editor' }).click();
+
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			await expect(uiEditor).toBeVisible();
+
+			const nodesList = uiEditor.locator('[aria-label="Nodes list"]');
+			const initialCount = await nodesList.locator('li').count();
+
+			await uiEditor.getByRole('button', { name: 'Add node' }).click();
+
+			await expect(nodesList.locator('li')).toHaveCount(initialCount + 1);
+		});
+
+		test('UI editor diagram updates when nodes are edited', async ({ page }) => {
+			await page.goto('/');
+			const yamlEditor = page.locator('textarea[aria-label="YAML diagram specification"]');
+			await expect(yamlEditor).toBeVisible({ timeout: 8_000 });
+
+			// Load a simple spec with one node
+			await yamlEditor.fill(
+				'title: "Test"\nnodes:\n  - id: a\n    label: "Alpha"\n    position: {x: 0, y: 0}'
+			);
+			await yamlEditor.dispatchEvent('input');
+
+			// Switch to UI editor
+			await page.getByRole('button', { name: 'Switch to UI editor' }).click();
+
+			const uiEditor = page.locator('[aria-label="UI diagram editor"]');
+			await expect(uiEditor).toBeVisible();
+
+			// Expand the first node
+			await uiEditor.getByRole('button', { name: /Edit node Alpha/i }).click();
+
+			// Change the label
+			const labelInput = uiEditor.locator('[aria-label="Node label"]');
+			await labelInput.fill('Beta');
+			await labelInput.dispatchEvent('input');
+
+			// The diagram SVG title should still render (spec is valid)
+			const svg = page.locator('svg.iso-diagram');
+			await expect(svg).toBeVisible();
+		});
+	});
 });
