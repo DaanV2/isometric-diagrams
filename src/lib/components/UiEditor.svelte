@@ -351,7 +351,7 @@
 		{/if}
 
 		<ul class="item-list" aria-label="Edges list">
-			{#each spec.edges ?? [] as edge, i}
+			{#each spec.edges ?? [] as edge, i (edge.from + edge.to + i)}
 				<li class="item" class:expanded={expandedEdgeIndex === i}>
 					<div class="item-header">
 						<button
