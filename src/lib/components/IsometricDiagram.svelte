@@ -54,7 +54,7 @@
 	}
 
 	/** Build a list of grid lines for background decoration */
-	const gridLines = $derived(() => {
+	const gridLines = $derived.by(() => {
 		if (!showGrid) return [];
 		const positions = spec.nodes.map((n) => n.position);
 		if (positions.length === 0) return [];
@@ -86,7 +86,7 @@
 	);
 
 	/** Group boundary polygons */
-	const groupPolygons = $derived(() => {
+	const groupPolygons = $derived.by(() => {
 		if (!spec.groups) return [];
 		return spec.groups.map((g) => {
 			const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
@@ -135,13 +135,13 @@
 	<g class="content" style="transform: translate({offsetX}px, {offsetY}px)">
 		<!-- Grid lines -->
 		{#if showGrid}
-			{#each gridLines() as d, i (i)}
+			{#each gridLines as d, i (i)}
 				<path {d} fill="none" stroke={themeVars.gridLine} stroke-width="0.5" opacity="0.5" />
 			{/each}
 		{/if}
 
 		<!-- Group highlights -->
-		{#each groupPolygons() as grp (grp?.id)}
+		{#each groupPolygons as grp (grp?.id)}
 			{#if grp}
 				<rect
 					x={grp.minX}
