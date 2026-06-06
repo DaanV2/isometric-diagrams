@@ -129,7 +129,7 @@ export function arrowHead(
 	cfg: IsoConfig
 ): string {
 	const tip = isoToScreen(toX, toY, toZ + 0.5, cfg);
-	const base = isoToScreen(fromX, toY, toZ + 0.5, cfg);
+	const base = isoToScreen(toX, fromY, toZ + 0.5, cfg);
 	const dx = tip.x - base.x;
 	const dy = tip.y - base.y;
 	const len = Math.sqrt(dx * dx + dy * dy) || 1;
