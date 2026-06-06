@@ -88,24 +88,49 @@
 	/** Group boundary polygons */
 	const groupPolygons = $derived.by(() => {
 		if (!spec.groups) return [];
-		return spec.groups.map((g) => {
-			const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
-			if (memberNodes.length === 0) return null;
-			const hull = memberNodes.map((n) => {
-				const s = isoToScreen(n.position.x, n.position.y, n.position.z ?? 0, { tileSize });
-				return s;
-			});
-			const xs = hull.map((p) => p.x);
-			const ys = hull.map((p) => p.y);
-			const pad = tileSize * 1.2;
-			const minX = Math.min(...xs) - pad;
-			const maxX = Math.max(...xs) + pad;
-			// Subtract tileSize to account for cube height: the top face extends tileSize pixels
-			// above the base screen position, so without this the box clips through cube tops.
-			const minY = Math.min(...ys) - pad - tileSize;
-			const maxY = Math.max(...ys) + tileSize * 0.5 + pad * 0.5;
-			return { id: g.id, label: g.label, color: g.color, minX, minY, maxX, maxY };
-		}).filter(Boolean);
+		return spec.groups
+			.map((g) => {
+				const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
+				if (memberNodes.length === 0) return null;
+
+				const gxs = memberNodes.map((n) => n.position.x);
+				const gys = memberNodes.map((n) => n.position.y);
+				const maxZ = Math.max(...memberNodes.map((n) => n.position.z ?? 0));
+				const gpad = 1; // padding in grid units
+				const zTop = maxZ + 1; // grid z of the cube tops
+
+				const minGX = Math.min(...gxs) - gpad;
+				const maxGX = Math.max(...gxs) + gpad;
+				const minGY = Math.min(...gys) - gpad;
+				const maxGY = Math.max(...gys) + gpad;
+
+				const cfg = { tileSize };
+
+				// Project the four parallelogram corners from grid space.
+				// Top/right/left corners are at cube-top height so they clear the node boxes.
+				// Bottom corner stays at ground level with a small downward extension for cube sides.
+				const top = isoToScreen(minGX, minGY, zTop, cfg);
+				const right = isoToScreen(maxGX, minGY, zTop, cfg);
+				const bottom = isoToScreen(maxGX, maxGY, 0, cfg);
+				const left = isoToScreen(minGX, maxGY, zTop, cfg);
+
+				const points = [
+					`${top.x},${top.y}`,
+					`${right.x},${right.y}`,
+					`${bottom.x},${bottom.y + tileSize * 0.5}`,
+					`${left.x},${left.y}`
+				].join(' ');
+
+				return {
+					id: g.id,
+					label: g.label,
+					color: g.color,
+					points,
+					labelX: top.x,
+					labelY: top.y + 14
+				};
+			})
+			.filter(Boolean);
 	});
 </script>
 
@@ -143,20 +168,17 @@
 		<!-- Group highlights -->
 		{#each groupPolygons as grp (grp?.id)}
 			{#if grp}
-				<rect
-					x={grp.minX}
-					y={grp.minY}
-					width={grp.maxX - grp.minX}
-					height={grp.maxY - grp.minY}
-					rx="8"
+				<polygon
+					points={grp.points}
 					fill={grp.color ? grp.color + '18' : themeVars.groupFill}
 					stroke={grp.color ?? themeVars.groupStroke}
 					stroke-width="1.5"
 					stroke-dasharray="6,3"
 				/>
 				<text
-					x={grp.minX + 8}
-					y={grp.minY + 14}
+					x={grp.labelX}
+					y={grp.labelY}
+					text-anchor="middle"
 					class="group-label"
 					fill={grp.color ?? themeVars.textSecondary}
 				>
