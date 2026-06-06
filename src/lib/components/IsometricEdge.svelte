@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DiagramEdge, DiagramNode } from '../types/diagram.js';
-	import { edgePath, arrowHead, isoToScreen } from '../renderer/isometric.js';
+	import { edgeGeometry, type EdgeGeometry } from '../renderer/shapes.js';
 	import { getEdgeColour } from '../renderer/theme.js';
 
 	interface Props {
@@ -18,44 +18,13 @@
 	const colour = $derived(edge.style?.color ?? getEdgeColour(edge.type));
 	const directed = $derived(edge.directed !== false); // default true
 
-	const path = $derived(() => {
-		if (!fromNode || !toNode) return '';
-		return edgePath(
-			fromNode.position.x,
-			fromNode.position.y,
-			fromNode.position.z ?? 0,
-			toNode.position.x,
-			toNode.position.y,
-			toNode.position.z ?? 0,
-			{ tileSize }
-		);
-	});
-
-	const arrow = $derived(() => {
-		if (!directed || !fromNode || !toNode) return '';
-		return arrowHead(
-			toNode.position.x,
-			toNode.position.y,
-			toNode.position.z ?? 0,
-			fromNode.position.x,
-			fromNode.position.y,
-			{ tileSize }
-		);
-	});
-
-	const midLabel = $derived(() => {
-		if (!fromNode || !toNode || !edge.label) return null;
-		const s = isoToScreen(
-			(fromNode.position.x + toNode.position.x) / 2,
-			(fromNode.position.y + toNode.position.y) / 2,
-			((fromNode.position.z ?? 0) + (toNode.position.z ?? 0)) / 2 + 0.5,
-			{ tileSize }
-		);
-		return s;
+	const geo = $derived.by((): EdgeGeometry | null => {
+		if (!fromNode || !toNode) return null;
+		return edgeGeometry(fromNode, toNode, directed, Boolean(edge.label), tileSize);
 	});
 </script>
 
-{#if fromNode && toNode}
+{#if geo}
 	<g
 		class="iso-edge"
 		data-edge-from={edge.from}
@@ -63,29 +32,26 @@
 		style="transform: translate({offsetX}px, {offsetY}px)"
 	>
 		<path
-			d={path()}
+			d={geo.path}
 			class={edge.type === 'dependency' ? 'edge-path edge-path--dashed' : 'edge-path'}
 			fill="none"
 			stroke={colour}
 			stroke-width="1.5"
 		/>
-		{#if directed}
-			<polygon points={arrow()} fill={colour} opacity="0.85" />
+		{#if directed && geo.arrowPoints}
+			<polygon points={geo.arrowPoints} fill={colour} opacity="0.85" />
 		{/if}
-		{#if edge.label}
-			{@const pos = midLabel()}
-			{#if pos}
-				<text
-					x={pos.x}
-					y={pos.y}
-					text-anchor="middle"
-					dominant-baseline="middle"
-					class="edge-label"
-					style="pointer-events: none; user-select: none;"
-				>
-					{edge.label}
-				</text>
-			{/if}
+		{#if geo.midPoint}
+			<text
+				x={geo.midPoint.x}
+				y={geo.midPoint.y}
+				text-anchor="middle"
+				dominant-baseline="middle"
+				class="edge-label"
+				style="pointer-events: none; user-select: none;"
+			>
+				{edge.label}
+			</text>
 		{/if}
 	</g>
 {/if}

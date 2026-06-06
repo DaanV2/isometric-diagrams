@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DiagramSpec } from '../types/diagram.js';
 	import { boundingBox, isoToScreen } from '../renderer/isometric.js';
+	import { isoGridLines, groupBoundary } from '../renderer/shapes.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
 	import IsometricEdge from './IsometricEdge.svelte';
@@ -53,30 +54,10 @@
 		selectedNodeId = selectedNodeId === id ? null : id;
 	}
 
-	/** Build a list of grid lines for background decoration */
-	const gridLines = $derived.by(() => {
-		if (!showGrid) return [];
-		const positions = spec.nodes.map((n) => n.position);
-		if (positions.length === 0) return [];
-		const xs = positions.map((p) => p.x);
-		const ys = positions.map((p) => p.y);
-		const minGX = Math.min(...xs) - 1;
-		const maxGX = Math.max(...xs) + 1;
-		const minGY = Math.min(...ys) - 1;
-		const maxGY = Math.max(...ys) + 1;
-		const lines: string[] = [];
-		for (let gx = minGX; gx <= maxGX; gx++) {
-			const a = isoToScreen(gx, minGY, 0, { tileSize });
-			const b = isoToScreen(gx, maxGY, 0, { tileSize });
-			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
-		}
-		for (let gy = minGY; gy <= maxGY; gy++) {
-			const a = isoToScreen(minGX, gy, 0, { tileSize });
-			const b = isoToScreen(maxGX, gy, 0, { tileSize });
-			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
-		}
-		return lines;
-	});
+	/** Grid line paths for background decoration */
+	const gridLines = $derived.by(() =>
+		showGrid ? isoGridLines(spec.nodes, tileSize) : []
+	);
 
 	/** Sort nodes back-to-front (painter's algorithm) */
 	const sortedNodes = $derived(
@@ -91,44 +72,9 @@
 		return spec.groups
 			.map((g) => {
 				const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
-				if (memberNodes.length === 0) return null;
-
-				const gxs = memberNodes.map((n) => n.position.x);
-				const gys = memberNodes.map((n) => n.position.y);
-				const maxZ = Math.max(...memberNodes.map((n) => n.position.z ?? 0));
-				const gpad = 1; // padding in grid units
-				const zTop = maxZ + 1; // grid z of the cube tops
-
-				const minGX = Math.min(...gxs) - gpad;
-				const maxGX = Math.max(...gxs) + gpad;
-				const minGY = Math.min(...gys) - gpad;
-				const maxGY = Math.max(...gys) + gpad;
-
-				const cfg = { tileSize };
-
-				// Project the four parallelogram corners from grid space.
-				// Top/right/left corners are at cube-top height so they clear the node boxes.
-				// Bottom corner stays at ground level with a small downward extension for cube sides.
-				const top = isoToScreen(minGX, minGY, zTop, cfg);
-				const right = isoToScreen(maxGX, minGY, zTop, cfg);
-				const bottom = isoToScreen(maxGX, maxGY, 0, cfg);
-				const left = isoToScreen(minGX, maxGY, zTop, cfg);
-
-				const points = [
-					`${top.x},${top.y}`,
-					`${right.x},${right.y}`,
-					`${bottom.x},${bottom.y + tileSize * 0.5}`,
-					`${left.x},${left.y}`
-				].join(' ');
-
-				return {
-					id: g.id,
-					label: g.label,
-					color: g.color,
-					points,
-					labelX: top.x,
-					labelY: top.y + 14
-				};
+				const boundary = groupBoundary(memberNodes, tileSize);
+				if (!boundary) return null;
+				return { id: g.id, label: g.label, color: g.color, ...boundary };
 			})
 			.filter(Boolean);
 	});
