@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DiagramFloorTile } from '../types/diagram.js';
-	import { floorTilePath, isoToScreen } from '../renderer/isometric.js';
+	import { floorTileGeometry } from '../renderer/shapes.js';
 
 	interface Props {
 		tile: DiagramFloorTile;
@@ -11,27 +11,9 @@
 
 	let { tile, tileSize, offsetX, offsetY }: Props = $props();
 
-	const gz = $derived(tile.position.z ?? 0);
-	const w = $derived(tile.width ?? 1);
-	const d = $derived(tile.depth ?? 1);
-
 	const fillColour = $derived(tile.style?.fillColor ?? tile.style?.color ?? 'transparent');
 	const strokeColour = $derived(tile.style?.strokeColor ?? tile.style?.color ?? '#718096');
-
-	const path = $derived(
-		floorTilePath(tile.position.x, tile.position.y, gz, w, d, { tileSize })
-	);
-
-	const labelPos = $derived(
-		tile.label
-			? isoToScreen(
-					tile.position.x + (w - 1) / 2,
-					tile.position.y + (d - 1) / 2,
-					gz,
-					{ tileSize }
-				)
-			: null
-	);
+	const geo = $derived(floorTileGeometry(tile, tileSize));
 </script>
 
 <g
@@ -39,26 +21,24 @@
 	style="transform: translate({offsetX}px, {offsetY}px)"
 >
 	<path
-		d={path}
+		d={geo.path}
 		fill={fillColour}
 		stroke={strokeColour}
 		stroke-width="1.5"
 		stroke-dasharray={tile.style?.fillColor ? undefined : '6,3'}
 		opacity={tile.style?.opacity ?? 0.6}
 	/>
-	{#if tile.label}
-		{#if labelPos}
-			<text
-				x={labelPos.x}
-				y={labelPos.y}
-				text-anchor="middle"
-				dominant-baseline="middle"
-				class="floor-tile-label"
-				style="pointer-events: none; user-select: none;"
-			>
-				{tile.label}
-			</text>
-		{/if}
+	{#if geo.labelPos}
+		<text
+			x={geo.labelPos.x}
+			y={geo.labelPos.y}
+			text-anchor="middle"
+			dominant-baseline="middle"
+			class="floor-tile-label"
+			style="pointer-events: none; user-select: none;"
+		>
+			{tile.label}
+		</text>
 	{/if}
 </g>
 

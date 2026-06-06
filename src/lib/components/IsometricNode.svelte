@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DiagramNode } from '../types/diagram.js';
-	import { boxPaths, isoToScreen } from '../renderer/isometric.js';
+	import { nodeBox } from '../renderer/shapes.js';
 	import { getNodeColours } from '../renderer/theme.js';
 
 	interface Props {
@@ -14,23 +14,10 @@
 
 	let { node, tileSize, offsetX, offsetY, selected = false, onclick }: Props = $props();
 
-	const height = 1;
 	const colours = $derived(getNodeColours(node.type));
 	const hasIcon = $derived(Boolean(colours.icon?.trim()));
 	const baseOpacity = $derived(node.style?.opacity ?? 1);
-	const paths = $derived(
-		boxPaths(node.position.x, node.position.y, node.position.z ?? 0, height, { tileSize })
-	);
-	const labelPos = $derived(
-		isoToScreen(node.position.x, node.position.y, (node.position.z ?? 0) + height + 0.3, {
-			tileSize
-		})
-	);
-	const iconPos = $derived(
-		isoToScreen(node.position.x, node.position.y, (node.position.z ?? 0) + height * 0.52, {
-			tileSize
-		})
-	);
+	const box = $derived(nodeBox(node, tileSize));
 
 	const strokeWidth = $derived(selected ? 2.5 : 1.5);
 	const strokeColour = $derived(
@@ -63,7 +50,7 @@
 >
 	<!-- Left face -->
 	<path
-		d={paths.left}
+		d={box.left}
 		fill={leftFill}
 		fill-opacity={leftFillOpacity}
 		stroke={strokeColour}
@@ -71,7 +58,7 @@
 	/>
 	<!-- Right face -->
 	<path
-		d={paths.right}
+		d={box.right}
 		fill={rightFill}
 		fill-opacity={rightFillOpacity}
 		stroke={strokeColour}
@@ -79,7 +66,7 @@
 	/>
 	<!-- Top face -->
 	<path
-		d={paths.top}
+		d={box.top}
 		fill={topFill}
 		fill-opacity={topFillOpacity}
 		stroke={strokeColour}
@@ -87,14 +74,14 @@
 	/>
 	{#if hasIcon}
 		<path
-			d={paths.top}
+			d={box.top}
 			fill="none"
 			stroke="#ffffff"
 			stroke-opacity={highlightOpacity}
 			stroke-width="1"
 		/>
 		<path
-			d={paths.right}
+			d={box.right}
 			fill="none"
 			stroke="#ffffff"
 			stroke-opacity={highlightOpacity * 0.6}
@@ -105,8 +92,8 @@
 	<!-- Icon in the centre of the box -->
 	{#if hasIcon}
 		<text
-			x={iconPos.x}
-			y={iconPos.y}
+			x={box.iconPos.x}
+			y={box.iconPos.y}
 			text-anchor="middle"
 			dominant-baseline="middle"
 			font-size={tileSize * 0.42}
@@ -119,8 +106,8 @@
 
 	<!-- Label below the block -->
 	<text
-		x={labelPos.x}
-		y={labelPos.y}
+		x={box.labelPos.x}
+		y={box.labelPos.y}
 		text-anchor="middle"
 		dominant-baseline="middle"
 		class="node-label"
@@ -130,8 +117,8 @@
 	</text>
 	{#if node.description}
 		<text
-			x={labelPos.x}
-			y={labelPos.y + 13}
+			x={box.labelPos.x}
+			y={box.labelPos.y + 13}
 			text-anchor="middle"
 			dominant-baseline="middle"
 			class="node-desc"

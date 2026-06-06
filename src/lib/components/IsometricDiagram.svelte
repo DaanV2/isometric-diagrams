@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DiagramSpec } from '../types/diagram.js';
-	import { boundingBox, isoToScreen } from '../renderer/isometric.js';
+	import { boundingBox } from '../renderer/isometric.js';
+	import { isoGridLines, groupBoundary } from '../renderer/shapes.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
 	import IsometricEdge from './IsometricEdge.svelte';
@@ -53,30 +54,10 @@
 		selectedNodeId = selectedNodeId === id ? null : id;
 	}
 
-	/** Build a list of grid lines for background decoration */
-	const gridLines = $derived.by(() => {
-		if (!showGrid) return [];
-		const positions = spec.nodes.map((n) => n.position);
-		if (positions.length === 0) return [];
-		const xs = positions.map((p) => p.x);
-		const ys = positions.map((p) => p.y);
-		const minGX = Math.min(...xs) - 1;
-		const maxGX = Math.max(...xs) + 1;
-		const minGY = Math.min(...ys) - 1;
-		const maxGY = Math.max(...ys) + 1;
-		const lines: string[] = [];
-		for (let gx = minGX; gx <= maxGX; gx++) {
-			const a = isoToScreen(gx, minGY, 0, { tileSize });
-			const b = isoToScreen(gx, maxGY, 0, { tileSize });
-			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
-		}
-		for (let gy = minGY; gy <= maxGY; gy++) {
-			const a = isoToScreen(minGX, gy, 0, { tileSize });
-			const b = isoToScreen(maxGX, gy, 0, { tileSize });
-			lines.push(`M ${a.x},${a.y} L ${b.x},${b.y}`);
-		}
-		return lines;
-	});
+	/** Grid line paths for background decoration */
+	const gridLines = $derived.by(() =>
+		showGrid ? isoGridLines(spec.nodes, tileSize) : []
+	);
 
 	/** Sort nodes back-to-front (painter's algorithm) */
 	const sortedNodes = $derived(
@@ -88,24 +69,14 @@
 	/** Group boundary polygons */
 	const groupPolygons = $derived.by(() => {
 		if (!spec.groups) return [];
-		return spec.groups.map((g) => {
-			const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
-			if (memberNodes.length === 0) return null;
-			const hull = memberNodes.map((n) => {
-				const s = isoToScreen(n.position.x, n.position.y, n.position.z ?? 0, { tileSize });
-				return s;
-			});
-			const xs = hull.map((p) => p.x);
-			const ys = hull.map((p) => p.y);
-			const pad = tileSize * 1.2;
-			const minX = Math.min(...xs) - pad;
-			const maxX = Math.max(...xs) + pad;
-			// Subtract tileSize to account for cube height: the top face extends tileSize pixels
-			// above the base screen position, so without this the box clips through cube tops.
-			const minY = Math.min(...ys) - pad - tileSize;
-			const maxY = Math.max(...ys) + tileSize * 0.5 + pad * 0.5;
-			return { id: g.id, label: g.label, color: g.color, minX, minY, maxX, maxY };
-		}).filter(Boolean);
+		return spec.groups
+			.map((g) => {
+				const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
+				const boundary = groupBoundary(memberNodes, tileSize);
+				if (!boundary) return null;
+				return { id: g.id, label: g.label, color: g.color, ...boundary };
+			})
+			.filter(Boolean);
 	});
 </script>
 
@@ -143,20 +114,17 @@
 		<!-- Group highlights -->
 		{#each groupPolygons as grp (grp?.id)}
 			{#if grp}
-				<rect
-					x={grp.minX}
-					y={grp.minY}
-					width={grp.maxX - grp.minX}
-					height={grp.maxY - grp.minY}
-					rx="8"
+				<polygon
+					points={grp.points}
 					fill={grp.color ? grp.color + '18' : themeVars.groupFill}
 					stroke={grp.color ?? themeVars.groupStroke}
 					stroke-width="1.5"
 					stroke-dasharray="6,3"
 				/>
 				<text
-					x={grp.minX + 8}
-					y={grp.minY + 14}
+					x={grp.labelX}
+					y={grp.labelY}
+					text-anchor="middle"
 					class="group-label"
 					fill={grp.color ?? themeVars.textSecondary}
 				>
