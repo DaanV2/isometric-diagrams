@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DiagramSpec } from '../types/diagram.js';
-	import { boundingBox, isoToScreen } from '../renderer/isometric.js';
+	import { boundingBox } from '../renderer/isometric.js';
 	import { isoGridLines, groupBoundary } from '../renderer/shapes.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
