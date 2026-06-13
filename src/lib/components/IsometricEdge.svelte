@@ -22,6 +22,22 @@
 		if (!fromNode || !toNode) return null;
 		return edgeGeometry(fromNode, toNode, directed, Boolean(edge.label), tileSize);
 	});
+
+	// Sets stroke-dasharray/dashoffset to the element's actual path length so the
+	// draw animation works correctly for paths of any length (not capped at 1000px).
+	function measureAndAnimate(node: SVGPathElement, _path: string) {
+		function apply() {
+			const len = node.getTotalLength();
+			node.style.strokeDasharray = String(len);
+			node.style.strokeDashoffset = String(len);
+			// Restart the CSS animation after updating dash values.
+			node.style.animation = 'none';
+			void node.getBoundingClientRect(); // force reflow
+			node.style.animation = '';
+		}
+		apply();
+		return { update: (_newPath: string) => apply() };
+	}
 </script>
 
 {#if geo}
@@ -31,13 +47,24 @@
 		data-edge-to={edge.to}
 		style="transform: translate({offsetX}px, {offsetY}px)"
 	>
-		<path
-			d={geo.path}
-			class={edge.type === 'dependency' ? 'edge-path edge-path--dashed' : 'edge-path'}
-			fill="none"
-			stroke={colour}
-			stroke-width="1.5"
-		/>
+		{#if edge.type === 'dependency'}
+			<path
+				d={geo.path}
+				class="edge-path edge-path--dashed"
+				fill="none"
+				stroke={colour}
+				stroke-width="1.5"
+			/>
+		{:else}
+			<path
+				use:measureAndAnimate={geo.path}
+				d={geo.path}
+				class="edge-path"
+				fill="none"
+				stroke={colour}
+				stroke-width="1.5"
+			/>
+		{/if}
 		{#if directed && geo.arrowPoints}
 			<polygon points={geo.arrowPoints} fill={colour} opacity="0.85" />
 		{/if}
@@ -59,8 +86,6 @@
 <style>
 	.edge-path {
 		opacity: 0.85;
-		stroke-dasharray: 1000;
-		stroke-dashoffset: 1000;
 		animation: draw-line 0.8s ease-out forwards;
 	}
 
