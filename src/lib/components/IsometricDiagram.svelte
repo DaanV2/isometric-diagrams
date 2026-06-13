@@ -66,6 +66,30 @@
 		)
 	);
 
+	/** Sort edges back-to-front by midpoint depth (same x+y heuristic as nodes) */
+	const sortedEdges = $derived.by(() => {
+		if (!spec.edges) return [];
+		return [...spec.edges].sort((a, b) => {
+			const fromA = spec.nodes.find((n) => n.id === a.from);
+			const toA = spec.nodes.find((n) => n.id === a.to);
+			const fromB = spec.nodes.find((n) => n.id === b.from);
+			const toB = spec.nodes.find((n) => n.id === b.to);
+			const depthA =
+				((fromA?.position.x ?? 0) +
+					(fromA?.position.y ?? 0) +
+					(toA?.position.x ?? 0) +
+					(toA?.position.y ?? 0)) /
+				2;
+			const depthB =
+				((fromB?.position.x ?? 0) +
+					(fromB?.position.y ?? 0) +
+					(toB?.position.x ?? 0) +
+					(toB?.position.y ?? 0)) /
+				2;
+			return depthA - depthB;
+		});
+	});
+
 	/** Group boundary polygons */
 	const groupPolygons = $derived.by(() => {
 		if (!spec.groups) return [];
@@ -143,8 +167,8 @@
 			<IsometricFlatArrow {arrow} {tileSize} offsetX={0} offsetY={0} />
 		{/each}
 
-		<!-- Edges (drawn below nodes) -->
-		{#each spec.edges ?? [] as edge (edge.id ?? `${edge.from}-${edge.to}`)}
+		<!-- Edges (drawn below nodes, sorted back-to-front) -->
+		{#each sortedEdges as edge (edge.id ?? `${edge.from}-${edge.to}`)}
 			<IsometricEdge
 				{edge}
 				nodes={spec.nodes}
