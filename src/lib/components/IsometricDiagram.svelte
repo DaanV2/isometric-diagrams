@@ -59,6 +59,9 @@
 		showGrid ? isoGridLines(spec.nodes, tileSize) : []
 	);
 
+	/** Node lookup map — shared by edge sorting and group boundary computation */
+	const nodeMap = $derived(new Map(spec.nodes.map((n) => [n.id, n])));
+
 	/** Sort nodes back-to-front (painter's algorithm) */
 	const sortedNodes = $derived(
 		[...spec.nodes].sort(
@@ -67,14 +70,14 @@
 	);
 
 	/** Sort edges back-to-front by midpoint depth (same x+y heuristic as nodes) */
-	const sortedEdges = $derived(sortEdgesByDepth(spec.edges ?? [], spec.nodes));
+	const sortedEdges = $derived(sortEdgesByDepth(spec.edges ?? [], nodeMap));
 
 	/** Group boundary polygons */
 	const groupPolygons = $derived.by(() => {
 		if (!spec.groups) return [];
 		return spec.groups
 			.map((g) => {
-				const memberNodes = spec.nodes.filter((n) => g.nodes.includes(n.id));
+				const memberNodes = g.nodes.map((id) => nodeMap.get(id)).filter((n) => n !== undefined);
 				const boundary = groupBoundary(memberNodes, tileSize);
 				if (!boundary) return null;
 				return { id: g.id, label: g.label, color: g.color, ...boundary };

@@ -72,11 +72,12 @@ export function nodeBox(node: DiagramNode, tileSize: number): NodeBox {
  * as nodes. Depth is approximated as the average of the two endpoint depths.
  * Edges with unknown endpoints (dangling references) sort to the back.
  */
-export function sortEdgesByDepth(edges: DiagramEdge[], nodes: DiagramNode[]): DiagramEdge[] {
-	const nodeMap = new Map(nodes.map((n) => [n.id, n.position.x + n.position.y]));
+export function sortEdgesByDepth(edges: DiagramEdge[], nodeMap: Map<string, DiagramNode>): DiagramEdge[] {
 	return [...edges].sort((a, b) => {
-		const depthA = ((nodeMap.get(a.from) ?? 0) + (nodeMap.get(a.to) ?? 0)) / 2;
-		const depthB = ((nodeMap.get(b.from) ?? 0) + (nodeMap.get(b.to) ?? 0)) / 2;
+		const fromA = nodeMap.get(a.from), toA = nodeMap.get(a.to);
+		const fromB = nodeMap.get(b.from), toB = nodeMap.get(b.to);
+		const depthA = ((fromA?.position.x ?? 0) + (fromA?.position.y ?? 0) + (toA?.position.x ?? 0) + (toA?.position.y ?? 0)) / 2;
+		const depthB = ((fromB?.position.x ?? 0) + (fromB?.position.y ?? 0) + (toB?.position.x ?? 0) + (toB?.position.y ?? 0)) / 2;
 		return depthA - depthB;
 	});
 }
