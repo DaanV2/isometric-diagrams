@@ -72,24 +72,12 @@ export function nodeBox(node: DiagramNode, tileSize: number): NodeBox {
  * as nodes. Depth is approximated as the average of the two endpoint depths.
  * Edges with unknown endpoints (dangling references) sort to the back.
  */
-export function sortEdgesByDepth(edges: DiagramEdge[], nodes: DiagramNode[]): DiagramEdge[] {
+export function sortEdgesByDepth(edges: DiagramEdge[], nodeMap: Map<string, DiagramNode>): DiagramEdge[] {
 	return [...edges].sort((a, b) => {
-		const fromA = nodes.find((n) => n.id === a.from);
-		const toA = nodes.find((n) => n.id === a.to);
-		const fromB = nodes.find((n) => n.id === b.from);
-		const toB = nodes.find((n) => n.id === b.to);
-		const depthA =
-			((fromA?.position.x ?? 0) +
-				(fromA?.position.y ?? 0) +
-				(toA?.position.x ?? 0) +
-				(toA?.position.y ?? 0)) /
-			2;
-		const depthB =
-			((fromB?.position.x ?? 0) +
-				(fromB?.position.y ?? 0) +
-				(toB?.position.x ?? 0) +
-				(toB?.position.y ?? 0)) /
-			2;
+		const fromA = nodeMap.get(a.from), toA = nodeMap.get(a.to);
+		const fromB = nodeMap.get(b.from), toB = nodeMap.get(b.to);
+		const depthA = ((fromA?.position.x ?? 0) + (fromA?.position.y ?? 0) + (toA?.position.x ?? 0) + (toA?.position.y ?? 0)) / 2;
+		const depthB = ((fromB?.position.x ?? 0) + (fromB?.position.y ?? 0) + (toB?.position.x ?? 0) + (toB?.position.y ?? 0)) / 2;
 		return depthA - depthB;
 	});
 }
