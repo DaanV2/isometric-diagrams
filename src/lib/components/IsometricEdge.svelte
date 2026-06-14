@@ -2,19 +2,21 @@
 	import type { DiagramEdge, DiagramNode } from '../types/diagram.js';
 	import { edgeGeometry, type EdgeGeometry } from '../renderer/shapes.js';
 	import { getEdgeColour } from '../renderer/theme.js';
+	import { drawOnMount } from '../actions/draw-on-mount.js';
 
 	interface Props {
 		edge: DiagramEdge;
-		nodes: DiagramNode[];
+		/** Lookup of node id → node, shared by the parent diagram. */
+		nodeMap: Map<string, DiagramNode>;
 		tileSize: number;
 		offsetX: number;
 		offsetY: number;
 	}
 
-	let { edge, nodes, tileSize, offsetX, offsetY }: Props = $props();
+	let { edge, nodeMap, tileSize, offsetX, offsetY }: Props = $props();
 
-	const fromNode = $derived(nodes.find((n) => n.id === edge.from));
-	const toNode = $derived(nodes.find((n) => n.id === edge.to));
+	const fromNode = $derived(nodeMap.get(edge.from));
+	const toNode = $derived(nodeMap.get(edge.to));
 	const colour = $derived(edge.style?.color ?? getEdgeColour(edge.type));
 	const directed = $derived(edge.directed !== false); // default true
 
@@ -22,22 +24,6 @@
 		if (!fromNode || !toNode) return null;
 		return edgeGeometry(fromNode, toNode, directed, Boolean(edge.label), tileSize);
 	});
-
-	// Sets stroke-dasharray/dashoffset to the element's actual path length so the
-	// draw animation works correctly for paths of any length (not capped at 1000px).
-	function measureAndAnimate(node: SVGPathElement, _path: string) {
-		function apply() {
-			const len = node.getTotalLength();
-			node.style.strokeDasharray = String(len);
-			node.style.strokeDashoffset = String(len);
-			// Restart the CSS animation after updating dash values.
-			node.style.animation = 'none';
-			void node.getBoundingClientRect(); // force reflow
-			node.style.animation = '';
-		}
-		apply();
-		return { update: (_newPath: string) => apply() };
-	}
 </script>
 
 {#if geo}
@@ -57,7 +43,7 @@
 			/>
 		{:else}
 			<path
-				use:measureAndAnimate={geo.path}
+				use:drawOnMount={geo.path}
 				d={geo.path}
 				class="edge-path"
 				fill="none"

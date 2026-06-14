@@ -118,7 +118,7 @@
 	{#if node.description}
 		<text
 			x={box.labelPos.x}
-			y={box.labelPos.y + 13}
+			y={box.labelPos.y + tileSize * 0.2}
 			text-anchor="middle"
 			dominant-baseline="middle"
 			class="node-desc"

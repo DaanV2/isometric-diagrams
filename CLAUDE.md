@@ -95,18 +95,22 @@ Edges use an L-shaped two-segment path: `(fromX,fromY)` → `(toX,fromY)` →
 leg arriving at the destination). The `arrowHead()` base point is
 `isoToScreen(toX, fromY, ...)` — not `fromX, toY`.
 
+## Draw-in animation
+
+Edges and flat arrows animate by "drawing" their path on mount. The
+`drawOnMount` Svelte action (`src/lib/actions/draw-on-mount.ts`) sets
+`stroke-dasharray` / `stroke-dashoffset` to the path's real `getTotalLength()`
+so the CSS keyframe completes for paths of any length — never hardcode a dash
+cap. Apply it with `use:drawOnMount={pathData}`; it re-runs only when the path
+data changes.
+
 ## Known open issues
 
-See the GitHub issue tracker. Current open items on branch
-`fix/isometric-rendering-improvements`:
-
-- **#25** — Edge draw animation uses hardcoded `stroke-dasharray: 1000`; breaks
-  for paths longer than 1000 px. Fix: use `getTotalLength()` or increase to a
-  safely large value.
-- **#27** — Node description offset is hardcoded at `13px`; should scale with
-  `tileSize`.
-- **#28** — Edges are not depth-sorted; can render in front of nodes they should
-  be behind.
+See the GitHub issue tracker. The earlier rendering items (#25 hardcoded
+`stroke-dasharray`, #27 hardcoded node description offset, #28 edge depth
+sorting) are all resolved. Remaining improvement work is tracked in the
+performance/usability plan (pan-zoom, persistence/export, editor validation,
+drag-to-place, in-app auto-layout).
 
 ## Unit testing
 

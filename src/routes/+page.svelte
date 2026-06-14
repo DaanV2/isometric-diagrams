@@ -24,6 +24,10 @@
 	/** Current editor mode: 'yaml' shows the raw YAML textarea, 'ui' shows the visual form editor */
 	let editorMode = $state<'ui' | 'yaml'>('yaml');
 
+	/** Debounce window (ms) for re-parsing while typing in the YAML editor. */
+	const COMPILE_DEBOUNCE_MS = 200;
+	let compileTimer: ReturnType<typeof setTimeout> | undefined;
+
 	async function loadExample(file: string) {
 		try {
 			const res = await fetch(`${base}/examples/${file}`);
@@ -31,7 +35,7 @@
 			const text = await res.text();
 			editorYaml = text;
 			activeExample = file;
-			compileYaml();
+			compileNow();
 		} catch (e) {
 			parseError = `Could not load example: ${(e as Error).message}`;
 		}
@@ -47,10 +51,24 @@
 		}
 	}
 
+	/** Debounced compile for the textarea so typing isn't blocked by re-parsing. */
+	function scheduleCompile() {
+		clearTimeout(compileTimer);
+		compileTimer = setTimeout(compileYaml, COMPILE_DEBOUNCE_MS);
+	}
+
+	/** Compile immediately, cancelling any pending debounced compile. */
+	function compileNow() {
+		clearTimeout(compileTimer);
+		compileYaml();
+	}
+
 	/** Toggle between 'yaml' and 'ui' editor modes, syncing state across the switch. */
 	function toggleEditorMode() {
 		if (editorMode === 'yaml') {
-			// Switch YAML → UI: spec is already parsed from YAML, nothing extra needed
+			// Switch YAML → UI: flush any pending debounced parse so the visual
+			// editor reflects the very latest YAML edits.
+			compileNow();
 			editorMode = 'ui';
 		} else {
 			// Switch UI → YAML: dump current spec back into the YAML string
@@ -134,7 +152,7 @@
 				<div class="editor-toolbar">
 					<span class="editor-label">{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}</span>
 					{#if editorMode === 'yaml'}
-						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
+						<button class="apply-btn" onclick={compileNow}>▶ Apply</button>
 					{/if}
 				</div>
 
@@ -142,7 +160,7 @@
 					<textarea
 						class="yaml-editor"
 						bind:value={editorYaml}
-						oninput={compileYaml}
+						oninput={scheduleCompile}
 						spellcheck={false}
 						aria-label="YAML diagram specification"
 					></textarea>
@@ -167,11 +185,9 @@
 
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
-				{#key spec}
-					<div class="diagram-wrapper animate-diagram-in" style="position: relative;">
-						<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
-					</div>
-				{/key}
+				<div class="diagram-wrapper animate-diagram-in" style="position: relative;">
+					<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
+				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
 			{:else}

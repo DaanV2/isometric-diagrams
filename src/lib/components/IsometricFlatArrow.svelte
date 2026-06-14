@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DiagramFlatArrow } from '../types/diagram.js';
 	import { flatArrowGeometry } from '../renderer/shapes.js';
+	import { drawOnMount } from '../actions/draw-on-mount.js';
 
 	interface Props {
 		arrow: DiagramFlatArrow;
@@ -21,6 +22,7 @@
 	style="transform: translate({offsetX}px, {offsetY}px)"
 >
 	<path
+		use:drawOnMount={geo.path}
 		d={geo.path}
 		class="flat-arrow-path"
 		fill="none"
@@ -47,8 +49,8 @@
 
 <style>
 	.flat-arrow-path {
-		stroke-dasharray: 1000;
-		stroke-dashoffset: 1000;
+		/* stroke-dasharray / dashoffset are set to the true path length by the
+		   drawOnMount action so the draw animation works for any length. */
 		animation: draw-flat-arrow 0.8s ease-out forwards;
 	}
 

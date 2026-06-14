@@ -160,7 +160,7 @@
 		{#each sortedEdges as edge (edge.id ?? `${edge.from}-${edge.to}`)}
 			<IsometricEdge
 				{edge}
-				nodes={spec.nodes}
+				{nodeMap}
 				{tileSize}
 				offsetX={0}
 				offsetY={0}
