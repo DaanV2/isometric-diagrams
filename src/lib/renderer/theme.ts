@@ -70,6 +70,9 @@ export function getNodeColours(type: NodeType | undefined): NodeColours {
 	return NODE_COLOURS[type ?? 'generic'] ?? NODE_COLOURS['generic'];
 }
 
+/** All valid node type names (runtime source of truth, mirrors the NodeType union). */
+export const NODE_TYPE_NAMES = Object.keys(NODE_COLOURS) as NodeType[];
+
 const EDGE_COLOURS: Record<EdgeType, string> = {
 	network: '#4299e1',
 	flow: '#48bb78',
@@ -81,3 +84,6 @@ const EDGE_COLOURS: Record<EdgeType, string> = {
 export function getEdgeColour(type: EdgeType | undefined): string {
 	return EDGE_COLOURS[type ?? 'generic'] ?? EDGE_COLOURS['generic'];
 }
+
+/** All valid edge type names (runtime source of truth, mirrors the EdgeType union). */
+export const EDGE_TYPE_NAMES = Object.keys(EDGE_COLOURS) as EdgeType[];

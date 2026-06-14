@@ -1,8 +1,12 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
+	import { lintSpec, findTokenLine, type Diagnostic } from '$lib/parser/lint.js';
+	import { autoLayout } from '$lib/layout.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import UiEditor from '$lib/components/UiEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
+	import { encodeShare, decodeShare } from '$lib/share.js';
 	import { base } from '$app/paths';
 
 	// ── Example definitions ──────────────────────────────────────
@@ -15,14 +19,37 @@
 
 	let editorYaml = $state('');
 	let parseError = $state<string | null>(null);
+	let parseErrorLine = $state<number | null>(null);
 	let spec = $state<DiagramSpec | null>(null);
 	let activeExample = $state<string>('');
-	let diagramWidth = $state(860);
-	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
 	let showGrid = $state(true);
+	/** Node selected on the canvas / in the UI editor (kept in sync between them). */
+	let selectedNodeId = $state<string | null>(null);
+	let yamlEl = $state<HTMLTextAreaElement | null>(null);
+
+	/** Non-fatal problems for the current valid spec (dangling refs, dup ids, …). */
+	const diagnostics = $derived<Diagnostic[]>(spec ? lintSpec(spec) : []);
 	/** Current editor mode: 'yaml' shows the raw YAML textarea, 'ui' shows the visual form editor */
 	let editorMode = $state<'ui' | 'yaml'>('yaml');
+
+	/** Debounce window (ms) for re-parsing while typing in the YAML editor. */
+	const COMPILE_DEBOUNCE_MS = 200;
+	let compileTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** localStorage key for the last-edited document. */
+	const STORAGE_KEY = 'isometric-diagrams:doc';
+	/** Set once the initial document has been restored, so we don't persist '' first. */
+	let restored = $state(false);
+	let shareMsg = $state<string | null>(null);
+	let shareMsgTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Remove a #d=… permalink from the address bar once the doc diverges from it. */
+	function clearShareHash() {
+		if (typeof window !== 'undefined' && window.location.hash.includes('d=')) {
+			history.replaceState(null, '', window.location.pathname + window.location.search);
+		}
+	}
 
 	async function loadExample(file: string) {
 		try {
@@ -31,26 +58,75 @@
 			const text = await res.text();
 			editorYaml = text;
 			activeExample = file;
-			compileYaml();
+			clearShareHash();
+			compileNow();
 		} catch (e) {
 			parseError = `Could not load example: ${(e as Error).message}`;
 		}
 	}
 
 	function compileYaml() {
-		parseError = null;
 		try {
 			spec = parseYaml(editorYaml);
+			parseError = null;
+			parseErrorLine = null;
 		} catch (e) {
-			parseError = e instanceof ParseError ? e.message : String(e);
+			if (e instanceof ParseError) {
+				parseError = e.message;
+				parseErrorLine = e.line ?? null;
+			} else {
+				parseError = String(e);
+				parseErrorLine = null;
+			}
 			spec = null;
 		}
+	}
+
+	/** Focus the YAML editor and select the given 1-based line. */
+	function gotoLine(line: number) {
+		const ta = yamlEl;
+		if (!ta) return;
+		const lines = editorYaml.split('\n');
+		const target = Math.min(Math.max(1, line), lines.length);
+		let start = 0;
+		for (let i = 0; i < target - 1; i++) start += lines[i].length + 1;
+		const end = start + (lines[target - 1]?.length ?? 0);
+		ta.focus();
+		ta.setSelectionRange(start, end);
+		const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+		ta.scrollTop = Math.max(0, (target - 1) * lh - ta.clientHeight / 2);
+	}
+
+	/** Jump to the source location of a diagnostic, switching to YAML mode if needed. */
+	async function gotoDiagnostic(d: Diagnostic) {
+		if (editorMode !== 'yaml') {
+			if (spec) editorYaml = dumpYaml(spec);
+			editorMode = 'yaml';
+			await tick();
+		}
+		const line = findTokenLine(editorYaml, d.ref);
+		if (line) gotoLine(line);
+	}
+
+	/** Debounced compile for the textarea so typing isn't blocked by re-parsing. */
+	function scheduleCompile() {
+		clearShareHash();
+		clearTimeout(compileTimer);
+		compileTimer = setTimeout(compileYaml, COMPILE_DEBOUNCE_MS);
+	}
+
+	/** Compile immediately, cancelling any pending debounced compile. */
+	function compileNow() {
+		clearTimeout(compileTimer);
+		compileYaml();
 	}
 
 	/** Toggle between 'yaml' and 'ui' editor modes, syncing state across the switch. */
 	function toggleEditorMode() {
 		if (editorMode === 'yaml') {
-			// Switch YAML → UI: spec is already parsed from YAML, nothing extra needed
+			// Switch YAML → UI: flush any pending debounced parse so the visual
+			// editor reflects the very latest YAML edits.
+			compileNow();
 			editorMode = 'ui';
 		} else {
 			// Switch UI → YAML: dump current spec back into the YAML string
@@ -62,11 +138,106 @@
 	/** Called by UiEditor when the user modifies the diagram in the visual editor. */
 	function handleUiSpecChange(newSpec: DiagramSpec) {
 		spec = newSpec;
+		syncYamlFromSpec();
 	}
 
-	// Load the first example on mount using Svelte 5 effect
+	let yamlSyncTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Re-dump the YAML from the spec after a visual edit (drag/UI/auto-layout). */
+	function syncYamlFromSpec() {
+		clearTimeout(yamlSyncTimer);
+		yamlSyncTimer = setTimeout(() => {
+			if (spec) editorYaml = dumpYaml(spec);
+		}, 250);
+	}
+
+	/** Drag-to-place: update the dragged node's grid position live. */
+	function handleNodeMove(id: string, position: { x: number; y: number }) {
+		if (!spec) return;
+		spec = {
+			...spec,
+			nodes: spec.nodes.map((n) =>
+				n.id === id ? { ...n, position: { ...n.position, x: position.x, y: position.y } } : n
+			)
+		};
+		syncYamlFromSpec();
+	}
+
+	/** Re-arrange all nodes with the automatic layout, then sync the YAML. */
+	function applyAutoLayout() {
+		if (!spec) return;
+		spec = autoLayout(spec);
+		editorYaml = dumpYaml(spec);
+		clearShareHash();
+	}
+
+	/** The YAML text for the current document, dumping the spec when in UI mode. */
+	function currentYaml(): string {
+		return editorMode === 'ui' && spec ? dumpYaml(spec) : editorYaml;
+	}
+
+	/** Build a shareable permalink for the current document and copy it. */
+	async function share() {
+		const url = `${window.location.origin}${window.location.pathname}#d=${encodeShare(currentYaml())}`;
+		try {
+			history.replaceState(null, '', url);
+		} catch {
+			/* history not available */
+		}
+		let msg = 'Link copied to clipboard';
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			msg = 'Link added to the address bar';
+		}
+		shareMsg = msg;
+		clearTimeout(shareMsgTimer);
+		shareMsgTimer = setTimeout(() => (shareMsg = null), 2200);
+	}
+
+	/** Restore the initial document: permalink → last session → default example. */
+	async function init() {
+		const hashMatch = window.location.hash.match(/[#&]d=([^&]+)/);
+		if (hashMatch) {
+			try {
+				editorYaml = decodeShare(hashMatch[1]);
+				activeExample = '';
+				compileNow();
+				restored = true;
+				return;
+			} catch {
+				/* malformed permalink — fall through */
+			}
+		}
+		try {
+			const saved = localStorage.getItem(STORAGE_KEY);
+			if (saved && saved.trim()) {
+				editorYaml = saved;
+				activeExample = '';
+				compileNow();
+				restored = true;
+				return;
+			}
+		} catch {
+			/* storage unavailable */
+		}
+		await loadExample(EXAMPLES[0].file);
+		restored = true;
+	}
+
+	// One-time restore on mount (effects only run in the browser).
 	$effect(() => {
-		loadExample(EXAMPLES[0].file);
+		init();
+	});
+
+	// Persist edits to localStorage once the initial document is restored.
+	$effect(() => {
+		const doc = editorYaml;
+		if (!restored) return;
+		try {
+			localStorage.setItem(STORAGE_KEY, doc);
+		} catch {
+			/* storage full or unavailable */
+		}
 	});
 </script>
 
@@ -122,7 +293,20 @@
 		>
 			{showGrid ? '⊞ Grid' : '⊟ Grid'}
 		</button>
+		<button
+			class="share-btn"
+			onclick={share}
+			disabled={!spec && !editorYaml.trim()}
+			aria-label="Copy a shareable link"
+			title="Copy a shareable link to this diagram"
+		>
+			🔗 Share
+		</button>
 	</header>
+
+	{#if shareMsg}
+		<div class="share-toast" role="status" aria-live="polite">{shareMsg}</div>
+	{/if}
 
 	<main>
 		{#if editorVisible}
@@ -133,16 +317,27 @@
 			>
 				<div class="editor-toolbar">
 					<span class="editor-label">{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}</span>
-					{#if editorMode === 'yaml'}
-						<button class="apply-btn" onclick={compileYaml}>▶ Apply</button>
-					{/if}
+					<div class="toolbar-actions">
+						<button
+							class="tool-btn"
+							onclick={applyAutoLayout}
+							disabled={!spec}
+							title="Auto-arrange all nodes"
+						>
+							⤢ Layout
+						</button>
+						{#if editorMode === 'yaml'}
+							<button class="apply-btn" onclick={compileNow}>▶ Apply</button>
+						{/if}
+					</div>
 				</div>
 
 				{#if editorMode === 'yaml'}
 					<textarea
 						class="yaml-editor"
+						bind:this={yamlEl}
 						bind:value={editorYaml}
-						oninput={compileYaml}
+						oninput={scheduleCompile}
 						spellcheck={false}
 						aria-label="YAML diagram specification"
 					></textarea>
@@ -150,16 +345,58 @@
 						{#key parseError}
 							<div class="error-banner animate-pop" role="alert">
 								<span class="error-icon" aria-hidden="true">⚠</span>
-								<strong>Parse error:</strong>
-								{parseError}
+								<div class="error-body">
+									<strong>Parse error{parseErrorLine ? ` (line ${parseErrorLine})` : ''}:</strong>
+									{parseError}
+									{#if parseErrorLine}
+										<button
+											type="button"
+											class="goto-line-btn"
+											onclick={() => parseErrorLine && gotoLine(parseErrorLine)}
+										>
+											Go to line {parseErrorLine}
+										</button>
+									{/if}
+								</div>
 							</div>
 						{/key}
 					{/if}
 				{:else if spec}
-					<UiEditor {spec} onspecchange={handleUiSpecChange} />
+					<UiEditor
+						{spec}
+						onspecchange={handleUiSpecChange}
+						selectedId={selectedNodeId}
+						onselect={(id) => (selectedNodeId = id)}
+					/>
 				{:else}
 					<div class="ui-editor-placeholder">
 						<span>⚠ Fix the YAML first, then switch to UI editor.</span>
+					</div>
+				{/if}
+
+				{#if diagnostics.length > 0}
+					<div class="problems-panel" aria-label="Problems">
+						<div class="problems-header">
+							⚠ {diagnostics.length} problem{diagnostics.length === 1 ? '' : 's'}
+						</div>
+						<ul class="problems-list">
+							{#each diagnostics as d, i (i)}
+								<li>
+									<button
+										type="button"
+										class="problem problem--{d.severity}"
+										onclick={() => gotoDiagnostic(d)}
+										disabled={!d.ref}
+										title={d.ref ? 'Jump to source' : undefined}
+									>
+										<span class="problem-icon" aria-hidden="true"
+											>{d.severity === 'error' ? '⛔' : '⚠'}</span
+										>
+										<span class="problem-msg">{d.message}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
 					</div>
 				{/if}
 			</section>
@@ -167,11 +404,15 @@
 
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
-				{#key spec}
-					<div class="diagram-wrapper animate-diagram-in" style="position: relative;">
-						<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
-					</div>
-				{/key}
+				<div class="diagram-wrapper animate-diagram-in">
+					<IsometricDiagram
+						{spec}
+						{showGrid}
+						selectedId={selectedNodeId}
+						onselect={(id) => (selectedNodeId = id)}
+						onnodemove={handleNodeMove}
+					/>
+				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
 			{:else}
@@ -315,6 +556,40 @@
 		color: #3fb950;
 	}
 
+	.share-btn {
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid #30363d;
+		background: transparent;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.share-btn:hover:not(:disabled) {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.share-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.share-toast {
+		position: fixed;
+		top: 56px;
+		right: 16px;
+		z-index: 10;
+		padding: 8px 14px;
+		border-radius: 8px;
+		background: #1d3557;
+		border: 1px solid #4299e1;
+		color: #cfe8ff;
+		font-size: 12px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		animation: pop 0.3s ease-out;
+	}
+
 	/* ── Main layout ──────────────────────── */
 	main {
 		display: flex;
@@ -349,6 +624,12 @@
 		letter-spacing: 0.06em;
 	}
 
+	.toolbar-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
 	.apply-btn {
 		padding: 3px 10px;
 		border-radius: 5px;
@@ -360,6 +641,25 @@
 	}
 	.apply-btn:hover {
 		background: #2a4a7f;
+	}
+
+	.tool-btn {
+		padding: 3px 10px;
+		border-radius: 5px;
+		border: 1px solid #30363d;
+		background: #161b22;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 11px;
+		white-space: nowrap;
+	}
+	.tool-btn:hover:not(:disabled) {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.tool-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.yaml-editor {
@@ -394,6 +694,82 @@
 		flex-shrink: 0;
 		line-height: 1.3;
 		animation: pulse-icon 1.5s ease-in-out infinite;
+	}
+
+	.error-body {
+		min-width: 0;
+	}
+
+	.goto-line-btn {
+		display: inline-block;
+		margin-top: 6px;
+		padding: 2px 8px;
+		border-radius: 5px;
+		border: 1px solid #fecaca;
+		background: transparent;
+		color: #fecaca;
+		cursor: pointer;
+		font-size: 0.85rem;
+	}
+	.goto-line-btn:hover {
+		background: rgba(254, 202, 202, 0.15);
+	}
+
+	/* ── Problems panel ───────────────────── */
+	.problems-panel {
+		flex-shrink: 0;
+		max-height: 35%;
+		overflow-y: auto;
+		border-top: 1px solid #21262d;
+		background: #0d1117;
+	}
+	.problems-header {
+		position: sticky;
+		top: 0;
+		padding: 6px 10px;
+		font-size: 11px;
+		font-weight: 600;
+		color: #d29922;
+		background: #161b22;
+		border-bottom: 1px solid #21262d;
+	}
+	.problems-list {
+		list-style: none;
+		margin: 0;
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.problem {
+		display: flex;
+		align-items: flex-start;
+		gap: 6px;
+		width: 100%;
+		padding: 5px 6px;
+		border: none;
+		border-radius: 5px;
+		background: transparent;
+		color: #c9d1d9;
+		cursor: pointer;
+		font-size: 11px;
+		line-height: 1.4;
+		text-align: left;
+	}
+	.problem:hover:not(:disabled) {
+		background: #21262d;
+	}
+	.problem:disabled {
+		cursor: default;
+	}
+	.problem-icon {
+		flex-shrink: 0;
+	}
+	.problem--error .problem-msg {
+		color: #ff9a9a;
+	}
+	.problem--warning .problem-msg {
+		color: #e3b341;
 	}
 
 	@keyframes pulse-icon {
@@ -440,15 +816,16 @@
 	.diagram-panel {
 		flex: 1;
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: auto;
+		overflow: hidden;
 		padding: 16px;
 		background: #0d1117;
+		min-width: 0;
 	}
 
 	.diagram-wrapper {
-		display: inline-block;
+		position: relative;
+		width: 100%;
+		height: 100%;
 		border-radius: 8px;
 		overflow: hidden;
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);

@@ -24,8 +24,9 @@ src/lib/components/Isometric*.svelte  ← Svelte components (display only)
 Low-level functions that convert grid coordinates to screen coordinates.
 **No diagram types here.** Takes raw numbers, returns numbers or SVG path strings.
 
-Key functions: `isoToScreen`, `boxPaths`, `edgePath`, `arrowHead`,
-`flatArrowPath`, `flatArrowHead`, `floorTilePath`, `tilePath`, `boundingBox`.
+Key functions: `isoToScreen`, `screenToIso` (inverse, for drag-to-place),
+`boxPaths`, `edgePath`, `arrowHead`, `flatArrowPath`, `flatArrowHead`,
+`floorTilePath`, `tilePath`, `boundingBox`.
 
 Coordinate system:
 - Grid X-axis → right-and-down on screen
@@ -57,6 +58,43 @@ Components import from `shapes.ts`, compute one `$derived` geometry value, and
 bind its named fields into the SVG template. They should contain **no raw
 `isoToScreen` / `boxPaths` calls** — if you need a new shape, add it to
 `shapes.ts` first.
+
+## Diagram viewport (pan / zoom / export)
+
+`IsometricDiagram` renders a `position:relative` viewport `<div>` that fills its
+parent, an `<svg width=100% height=100%>` whose `viewBox` is driven by a
+pan/zoom view, and fixed HTML overlays (title, zoom controls, export buttons,
+node-info) that do **not** pan/zoom.
+
+- The `viewBox` is kept at the viewport's aspect ratio (`vpW/zoom × vpH/zoom`)
+  so screen↔world mapping is linear; this makes wheel-zoom-around-cursor exact.
+- `userZoom` / `userCenter` are `null` until the user interacts — the view then
+  follows the auto-fit (`fitZoom`/`fitCenter`) derived from the content `bbox`.
+  The ⊡ Fit button resets them to `null`.
+- Pan starts only when the pointerdown target is not inside a `.iso-node`, so
+  node clicks still select.
+- Export lives in `src/lib/export.ts` (`downloadSvg` / `downloadPng`). It clones
+  the live `<svg>`, inlines each element's **computed** style (scoped component
+  CSS and CSS vars don't survive serialization), frames it to the content
+  bounds, and paints a background.
+- Sharing/persistence: the page persists the doc to `localStorage` and encodes
+  permalinks via `src/lib/share.ts` (`encodeShare`/`decodeShare`, base64url).
+  Restore order on load: `#d=…` permalink → last session → default example.
+
+### Direct manipulation & layout
+
+- **Drag-to-place**: pass `onnodemove(id, {x, y})` to `IsometricDiagram`.
+  Pointer-down on a node starts a candidate drag; capture is taken lazily on the
+  first real move (so plain clicks never go through capture and the node's own
+  click stays the selection path). The grab point maps screen→grid via
+  `screenToIso`, snapping to integers. A trailing click after a real drag is
+  swallowed by a capture-phase guard so selection isn't toggled off.
+- **Auto-layout**: `autoLayout(spec)` in `src/lib/layout.ts` is a layered
+  (longest-path) placement — ranks become rows, siblings are centred, z is
+  preserved. The page's ⤢ Layout button applies it and re-dumps the YAML.
+- Visual edits (drag, UI editor, auto-layout) update `spec` live and re-dump
+  `editorYaml` on a short debounce (`syncYamlFromSpec`). Re-dumping drops YAML
+  comments — that's the accepted trade-off for visual editing.
 
 ## Svelte 5 reactivity rules
 
@@ -95,18 +133,40 @@ Edges use an L-shaped two-segment path: `(fromX,fromY)` → `(toX,fromY)` →
 leg arriving at the destination). The `arrowHead()` base point is
 `isoToScreen(toX, fromY, ...)` — not `fromX, toY`.
 
+## Draw-in animation
+
+Edges and flat arrows animate by "drawing" their path on mount. The
+`drawOnMount` Svelte action (`src/lib/actions/draw-on-mount.ts`) sets
+`stroke-dasharray` / `stroke-dashoffset` to the path's real `getTotalLength()`
+so the CSS keyframe completes for paths of any length — never hardcode a dash
+cap. Apply it with `use:drawOnMount={pathData}`; it re-runs only when the path
+data changes.
+
+## Authoring diagnostics
+
+`parseYaml` only guarantees structural well-formedness (and throws a `ParseError`
+carrying a 1-based `line` for YAML syntax errors). Semantic problems that would
+otherwise fail silently — edges/groups referencing unknown node ids, duplicate
+ids, unknown enum values, self-loops, empty diagrams — are reported as
+**non-fatal** `Diagnostic`s by `lintSpec(spec)` in `src/lib/parser/lint.ts`.
+The editor shows them in a "Problems" panel; each diagnostic carries a `ref`
+token the page locates via `findTokenLine` to jump the textarea to the source.
+Valid type names come from `NODE_TYPE_NAMES` / `EDGE_TYPE_NAMES` in `theme.ts`
+(runtime source of truth, mirroring the unions).
+
+The UI editor and canvas share selection: `IsometricDiagram` and `UiEditor`
+both take an optional controlled `selectedId` + `onselect`, lifted to the page.
+
 ## Known open issues
 
-See the GitHub issue tracker. Current open items on branch
-`fix/isometric-rendering-improvements`:
-
-- **#25** — Edge draw animation uses hardcoded `stroke-dasharray: 1000`; breaks
-  for paths longer than 1000 px. Fix: use `getTotalLength()` or increase to a
-  safely large value.
-- **#27** — Node description offset is hardcoded at `13px`; should scale with
-  `tileSize`.
-- **#28** — Edges are not depth-sorted; can render in front of nodes they should
-  be behind.
+See the GitHub issue tracker. The earlier rendering items (#25 hardcoded
+`stroke-dasharray`, #27 hardcoded node description offset, #28 edge depth
+sorting) are all resolved. The performance/usability plan is largely delivered:
+in-place reactive updates + debounced parse, pan/zoom + fit, SVG/PNG export,
+localStorage/permalink persistence, authoring diagnostics, drag-to-place, and
+in-app auto-layout. Remaining follow-ups: a full code editor (CodeMirror with
+syntax highlight/autocomplete) and extending the visual UI editor to manage
+groups, flat arrows, floor tiles, z-height, styles, and meta.
 
 ## Unit testing
 
@@ -123,6 +183,7 @@ npm run test:unit:watch    # watch mode
 src/lib/renderer/__tests__/
   helpers.ts                     ← shared fixtures and utilities (TILE, cfg, makeNode, makeEdge, makeArrow, makeTile, pathNumbers)
   isometric-projection.test.ts   ← isoToScreen
+  isometric-inverse.test.ts      ← screenToIso
   isometric-boxes.test.ts        ← tilePath, boxPaths
   isometric-edges.test.ts        ← edgePath, arrowHead
   isometric-flat-arrows.test.ts  ← flatArrowPath, flatArrowHead
@@ -134,6 +195,14 @@ src/lib/renderer/__tests__/
   shapes-floor-tile.test.ts      ← floorTileGeometry
   shapes-group.test.ts           ← groupBoundary
   shapes-grid.test.ts            ← isoGridLines
+
+src/lib/parser/__tests__/
+  lint.test.ts                   ← lintSpec, findTokenLine
+  examples.test.ts               ← bundled example specs parse + lint clean
+
+src/lib/__tests__/
+  share.test.ts                  ← encodeShare / decodeShare round-trips
+  layout.test.ts                 ← autoLayout
 ```
 
 ### Testing conventions
