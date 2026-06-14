@@ -108,6 +108,42 @@ See the GitHub issue tracker. Current open items on branch
 - **#28** — Edges are not depth-sorted; can render in front of nodes they should
   be behind.
 
+## Unit testing
+
+The renderer modules have a Vitest unit test suite. Run it with:
+
+```
+npm run test:unit          # single run
+npm run test:unit:watch    # watch mode
+```
+
+### Test file layout
+
+```
+src/lib/renderer/__tests__/
+  helpers.ts                     ← shared fixtures and utilities (TILE, cfg, makeNode, makeEdge, makeArrow, makeTile, pathNumbers)
+  isometric-projection.test.ts   ← isoToScreen
+  isometric-boxes.test.ts        ← tilePath, boxPaths
+  isometric-edges.test.ts        ← edgePath, arrowHead
+  isometric-flat-arrows.test.ts  ← flatArrowPath, flatArrowHead
+  isometric-floor.test.ts        ← floorTilePath, boundingBox
+  shapes-node.test.ts            ← NODE_HEIGHT, nodeBox
+  shapes-sort.test.ts            ← sortEdgesByDepth
+  shapes-edge.test.ts            ← edgeGeometry
+  shapes-flat-arrow.test.ts      ← flatArrowGeometry
+  shapes-floor-tile.test.ts      ← floorTileGeometry
+  shapes-group.test.ts           ← groupBoundary
+  shapes-grid.test.ts            ← isoGridLines
+```
+
+### Testing conventions
+
+- **One file per functional domain**, named `<module>-<domain>.test.ts`.
+- **Shared test helpers live in `helpers.ts`** — import `TILE`, `cfg`, `makeNode`, `makeEdge`, `makeArrow`, `makeTile`, and `pathNumbers` from there rather than redefining them per file.
+- **Test what the function guarantees**, not its internal implementation: path structure (`M…L…Z`), vertex counts, exact SVG strings for key cases, and behavioural properties (scaling, elevation, default values).
+- **Add a new `__tests__/` file** whenever you add a new exported function to `isometric.ts` or `shapes.ts`. Follow the existing naming pattern.
+- Vitest is configured in `vite.config.ts` with `include: ['src/**/*.test.ts']`; files under `__tests__/` are picked up automatically.
+
 ## Branch conventions
 
 - Active feature/fix work: `fix/<description>` or `feat/<description>`
