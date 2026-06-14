@@ -38,6 +38,22 @@ export function isoToScreen(
 }
 
 /**
+ * Inverse of {@link isoToScreen}: convert a screen point back to grid
+ * coordinates, given the z-layer the point sits on. Returns possibly-fractional
+ * grid coordinates (round them to snap to the grid). Used for drag-to-place.
+ */
+export function screenToIso(
+	sx: number,
+	sy: number,
+	gz: number,
+	{ tileSize }: IsoConfig
+): { gx: number; gy: number } {
+	const a = sx / tileSize; // gx - gy
+	const b = (sy + gz * tileSize) / (tileSize / 2); // gx + gy
+	return { gx: (a + b) / 2, gy: (b - a) / 2 };
+}
+
+/**
  * Build the SVG path for a diamond-shaped floor tile at the given grid position.
  * The diamond has its centre at the screen coordinates of (gx, gy, gz).
  */

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DiagramSpec } from '../types/diagram.js';
-	import { boundingBox } from '../renderer/isometric.js';
+	import { boundingBox, isoToScreen, screenToIso } from '../renderer/isometric.js';
 	import { isoGridLines, groupBoundary, sortEdgesByDepth } from '../renderer/shapes.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
@@ -23,10 +23,20 @@
 		selectedId?: string | null;
 		/** Called when the selected node changes (e.g. to sync the editor). */
 		onselect?: (id: string | null) => void;
+		/** Called while a node is dragged to a new (snapped) grid position. Enables drag-to-place. */
+		onnodemove?: (id: string, position: { x: number; y: number }) => void;
 	}
 
-	let { spec, theme, showGrid: showGridProp, width, height, selectedId, onselect }: Props =
-		$props();
+	let {
+		spec,
+		theme,
+		showGrid: showGridProp,
+		width,
+		height,
+		selectedId,
+		onselect,
+		onnodemove
+	}: Props = $props();
 
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
@@ -110,20 +120,80 @@
 		userCenter = { x: before.x - (px - vpW / 2) / newZoom, y: before.y - (py - vpH / 2) / newZoom };
 	}
 
-	// Drag-to-pan. Panning starts only on empty background so node clicks still select.
+	// Pointer gestures: drag a node to reposition it (when onnodemove is set),
+	// otherwise drag empty space to pan. Panning never starts on a node so node
+	// clicks still select.
 	let panning = $state(false);
 	let lastX = 0;
 	let lastY = 0;
 
+	// Node drag state. Pointer capture is taken lazily on the first real move so
+	// a plain click never goes through capture — the node's own click handler
+	// stays the authoritative selection path.
+	let draggingNodeId: string | null = null;
+	let dragGrabOffset = { x: 0, y: 0 };
+	let dragGz = 0;
+	let dragMoved = false;
+	let dragCaptured = false;
+	let dragStartX = 0;
+	let dragStartY = 0;
+	/** Set after a real drag so the trailing click doesn't toggle the selection. */
+	let suppressClick = false;
+
 	function onPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
-		if ((e.target as Element)?.closest('.iso-node')) return;
+		const nodeEl = (e.target as Element)?.closest('.iso-node');
+		if (nodeEl) {
+			const id = nodeEl.getAttribute('data-node-id');
+			const node = id ? nodeMap.get(id) : undefined;
+			if (onnodemove && id && node) {
+				draggingNodeId = id;
+				dragMoved = false;
+				dragCaptured = false;
+				dragStartX = e.clientX;
+				dragStartY = e.clientY;
+				dragGz = node.position.z ?? 0;
+				const start = clientToWorld(e.clientX, e.clientY);
+				const c = isoToScreen(node.position.x, node.position.y, dragGz, { tileSize });
+				dragGrabOffset = { x: start.x - c.x, y: start.y - c.y };
+			}
+			return; // never pan when starting on a node
+		}
 		panning = true;
 		lastX = e.clientX;
 		lastY = e.clientY;
 		viewportEl?.setPointerCapture(e.pointerId);
 	}
+
 	function onPointerMove(e: PointerEvent) {
+		if (draggingNodeId) {
+			if (!dragMoved && Math.abs(e.clientX - dragStartX) + Math.abs(e.clientY - dragStartY) <= 3) {
+				return; // below the click/drag threshold — treat as a potential click
+			}
+			dragMoved = true;
+			if (!dragCaptured) {
+				try {
+					viewportEl?.setPointerCapture(e.pointerId);
+				} catch {
+					/* capture unsupported */
+				}
+				dragCaptured = true;
+			}
+			const world = clientToWorld(e.clientX, e.clientY);
+			const { gx, gy } = screenToIso(
+				world.x - dragGrabOffset.x,
+				world.y - dragGrabOffset.y,
+				dragGz,
+				{ tileSize }
+			);
+			const sx = Math.round(gx);
+			const sy = Math.round(gy);
+			const cur = nodeMap.get(draggingNodeId);
+			if (cur && (cur.position.x !== sx || cur.position.y !== sy)) {
+				onnodemove?.(draggingNodeId, { x: sx, y: sy });
+			}
+			return;
+		}
 		if (!panning) return;
 		const dx = e.clientX - lastX;
 		const dy = e.clientY - lastY;
@@ -132,13 +202,48 @@
 		userZoom = zoom;
 		userCenter = { x: center.x - dx / zoom, y: center.y - dy / zoom };
 	}
+
 	function endPan(e: PointerEvent) {
+		if (draggingNodeId) {
+			const id = draggingNodeId;
+			const moved = dragMoved;
+			draggingNodeId = null;
+			if (dragCaptured) {
+				try {
+					viewportEl?.releasePointerCapture(e.pointerId);
+				} catch {
+					/* already released */
+				}
+				dragCaptured = false;
+			}
+			if (moved) {
+				// A real drag — keep the dragged node selected and swallow the
+				// trailing click so it doesn't toggle the selection back off.
+				suppressClick = true;
+				if (selectedId === undefined) internalSelected = id;
+				onselect?.(id);
+			}
+			// If it didn't move, do nothing: the node's own click selects it.
+			return;
+		}
 		panning = false;
 		try {
 			viewportEl?.releasePointerCapture(e.pointerId);
 		} catch {
 			/* pointer already released */
 		}
+	}
+
+	/** Capture-phase guard: swallow the click that follows a node drag. */
+	function clickGuard(node: HTMLElement) {
+		const handler = (e: Event) => {
+			if (suppressClick) {
+				e.stopPropagation();
+				suppressClick = false;
+			}
+		};
+		node.addEventListener('click', handler, true);
+		return { destroy: () => node.removeEventListener('click', handler, true) };
 	}
 
 	function zoomByButton(k: number) {
@@ -219,6 +324,7 @@
 	class:panning
 	role="application"
 	aria-label="Diagram canvas: {spec.title}. Scroll to zoom, drag to pan."
+	use:clickGuard
 	bind:this={viewportEl}
 	bind:clientWidth={vpW}
 	bind:clientHeight={vpH}

@@ -24,8 +24,9 @@ src/lib/components/Isometric*.svelte  ← Svelte components (display only)
 Low-level functions that convert grid coordinates to screen coordinates.
 **No diagram types here.** Takes raw numbers, returns numbers or SVG path strings.
 
-Key functions: `isoToScreen`, `boxPaths`, `edgePath`, `arrowHead`,
-`flatArrowPath`, `flatArrowHead`, `floorTilePath`, `tilePath`, `boundingBox`.
+Key functions: `isoToScreen`, `screenToIso` (inverse, for drag-to-place),
+`boxPaths`, `edgePath`, `arrowHead`, `flatArrowPath`, `flatArrowHead`,
+`floorTilePath`, `tilePath`, `boundingBox`.
 
 Coordinate system:
 - Grid X-axis → right-and-down on screen
@@ -79,6 +80,21 @@ node-info) that do **not** pan/zoom.
 - Sharing/persistence: the page persists the doc to `localStorage` and encodes
   permalinks via `src/lib/share.ts` (`encodeShare`/`decodeShare`, base64url).
   Restore order on load: `#d=…` permalink → last session → default example.
+
+### Direct manipulation & layout
+
+- **Drag-to-place**: pass `onnodemove(id, {x, y})` to `IsometricDiagram`.
+  Pointer-down on a node starts a candidate drag; capture is taken lazily on the
+  first real move (so plain clicks never go through capture and the node's own
+  click stays the selection path). The grab point maps screen→grid via
+  `screenToIso`, snapping to integers. A trailing click after a real drag is
+  swallowed by a capture-phase guard so selection isn't toggled off.
+- **Auto-layout**: `autoLayout(spec)` in `src/lib/layout.ts` is a layered
+  (longest-path) placement — ranks become rows, siblings are centred, z is
+  preserved. The page's ⤢ Layout button applies it and re-dumps the YAML.
+- Visual edits (drag, UI editor, auto-layout) update `spec` live and re-dump
+  `editorYaml` on a short debounce (`syncYamlFromSpec`). Re-dumping drops YAML
+  comments — that's the accepted trade-off for visual editing.
 
 ## Svelte 5 reactivity rules
 
@@ -145,9 +161,12 @@ both take an optional controlled `selectedId` + `onselect`, lifted to the page.
 
 See the GitHub issue tracker. The earlier rendering items (#25 hardcoded
 `stroke-dasharray`, #27 hardcoded node description offset, #28 edge depth
-sorting) are all resolved. Remaining improvement work is tracked in the
-performance/usability plan (pan-zoom, persistence/export, editor validation,
-drag-to-place, in-app auto-layout).
+sorting) are all resolved. The performance/usability plan is largely delivered:
+in-place reactive updates + debounced parse, pan/zoom + fit, SVG/PNG export,
+localStorage/permalink persistence, authoring diagnostics, drag-to-place, and
+in-app auto-layout. Remaining follow-ups: a full code editor (CodeMirror with
+syntax highlight/autocomplete) and extending the visual UI editor to manage
+groups, flat arrows, floor tiles, z-height, styles, and meta.
 
 ## Unit testing
 
@@ -164,6 +183,7 @@ npm run test:unit:watch    # watch mode
 src/lib/renderer/__tests__/
   helpers.ts                     ← shared fixtures and utilities (TILE, cfg, makeNode, makeEdge, makeArrow, makeTile, pathNumbers)
   isometric-projection.test.ts   ← isoToScreen
+  isometric-inverse.test.ts      ← screenToIso
   isometric-boxes.test.ts        ← tilePath, boxPaths
   isometric-edges.test.ts        ← edgePath, arrowHead
   isometric-flat-arrows.test.ts  ← flatArrowPath, flatArrowHead
@@ -182,6 +202,7 @@ src/lib/parser/__tests__/
 
 src/lib/__tests__/
   share.test.ts                  ← encodeShare / decodeShare round-trips
+  layout.test.ts                 ← autoLayout
 ```
 
 ### Testing conventions

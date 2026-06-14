@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import { lintSpec, findTokenLine, type Diagnostic } from '$lib/parser/lint.js';
+	import { autoLayout } from '$lib/layout.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import UiEditor from '$lib/components/UiEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
@@ -137,6 +138,36 @@
 	/** Called by UiEditor when the user modifies the diagram in the visual editor. */
 	function handleUiSpecChange(newSpec: DiagramSpec) {
 		spec = newSpec;
+		syncYamlFromSpec();
+	}
+
+	let yamlSyncTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Re-dump the YAML from the spec after a visual edit (drag/UI/auto-layout). */
+	function syncYamlFromSpec() {
+		clearTimeout(yamlSyncTimer);
+		yamlSyncTimer = setTimeout(() => {
+			if (spec) editorYaml = dumpYaml(spec);
+		}, 250);
+	}
+
+	/** Drag-to-place: update the dragged node's grid position live. */
+	function handleNodeMove(id: string, position: { x: number; y: number }) {
+		if (!spec) return;
+		spec = {
+			...spec,
+			nodes: spec.nodes.map((n) =>
+				n.id === id ? { ...n, position: { ...n.position, x: position.x, y: position.y } } : n
+			)
+		};
+		syncYamlFromSpec();
+	}
+
+	/** Re-arrange all nodes with the automatic layout, then sync the YAML. */
+	function applyAutoLayout() {
+		if (!spec) return;
+		spec = autoLayout(spec);
+		editorYaml = dumpYaml(spec);
+		clearShareHash();
 	}
 
 	/** The YAML text for the current document, dumping the spec when in UI mode. */
@@ -286,9 +317,19 @@
 			>
 				<div class="editor-toolbar">
 					<span class="editor-label">{editorMode === 'yaml' ? 'YAML Spec' : 'Visual Editor'}</span>
-					{#if editorMode === 'yaml'}
-						<button class="apply-btn" onclick={compileNow}>▶ Apply</button>
-					{/if}
+					<div class="toolbar-actions">
+						<button
+							class="tool-btn"
+							onclick={applyAutoLayout}
+							disabled={!spec}
+							title="Auto-arrange all nodes"
+						>
+							⤢ Layout
+						</button>
+						{#if editorMode === 'yaml'}
+							<button class="apply-btn" onclick={compileNow}>▶ Apply</button>
+						{/if}
+					</div>
 				</div>
 
 				{#if editorMode === 'yaml'}
@@ -369,6 +410,7 @@
 						{showGrid}
 						selectedId={selectedNodeId}
 						onselect={(id) => (selectedNodeId = id)}
+						onnodemove={handleNodeMove}
 					/>
 				</div>
 			{:else if !parseError}
@@ -582,6 +624,12 @@
 		letter-spacing: 0.06em;
 	}
 
+	.toolbar-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
 	.apply-btn {
 		padding: 3px 10px;
 		border-radius: 5px;
@@ -593,6 +641,25 @@
 	}
 	.apply-btn:hover {
 		background: #2a4a7f;
+	}
+
+	.tool-btn {
+		padding: 3px 10px;
+		border-radius: 5px;
+		border: 1px solid #30363d;
+		background: #161b22;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 11px;
+		white-space: nowrap;
+	}
+	.tool-btn:hover:not(:disabled) {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.tool-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.yaml-editor {
