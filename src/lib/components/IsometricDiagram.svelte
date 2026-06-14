@@ -14,11 +14,13 @@
 		theme?: 'light' | 'dark';
 		/** Override grid visibility. If undefined, uses spec.settings.showGrid (default true). */
 		showGrid?: boolean;
+		/** Fixed SVG width in px. Omit to auto-size to content. */
 		width?: number;
+		/** Fixed SVG height in px. Omit to auto-size to content. */
 		height?: number;
 	}
 
-	let { spec, theme, showGrid: showGridProp, width = 900, height = 600 }: Props = $props();
+	let { spec, theme, showGrid: showGridProp, width, height }: Props = $props();
 
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
@@ -44,9 +46,14 @@
 		)
 	);
 
+	const AUTO_PADDING = 40;
+	/** Resolved SVG dimensions — auto-size to content when props are omitted */
+	const svgWidth = $derived(width ?? bbox.width + AUTO_PADDING * 2);
+	const svgHeight = $derived(height ?? bbox.height + AUTO_PADDING * 2);
+
 	/** Translate so the content is centred in the SVG */
-	const offsetX = $derived(width / 2 - (bbox.minX + bbox.width / 2));
-	const offsetY = $derived(height / 2 - (bbox.minY + bbox.height / 2));
+	const offsetX = $derived(svgWidth / 2 - (bbox.minX + bbox.width / 2));
+	const offsetY = $derived(svgHeight / 2 - (bbox.minY + bbox.height / 2));
 
 	let selectedNodeId = $state<string | null>(null);
 
@@ -87,9 +94,9 @@
 </script>
 
 <svg
-	{width}
-	{height}
-	viewBox="0 0 {width} {height}"
+	width={svgWidth}
+	height={svgHeight}
+	viewBox="0 0 {svgWidth} {svgHeight}"
 	xmlns="http://www.w3.org/2000/svg"
 	class="iso-diagram"
 	data-diagram-title={spec.title}
