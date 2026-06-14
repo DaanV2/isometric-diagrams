@@ -11,7 +11,9 @@ import type {
 export class ParseError extends Error {
 	constructor(
 		message: string,
-		public readonly cause?: unknown
+		public readonly cause?: unknown,
+		/** 1-based line in the source where the error occurred, when known. */
+		public readonly line?: number
 	) {
 		super(message);
 		this.name = 'ParseError';
@@ -147,7 +149,9 @@ export function parseYaml(source: string): DiagramSpec {
 	try {
 		raw = yaml.load(source);
 	} catch (err) {
-		throw new ParseError(`YAML parse error: ${(err as Error).message}`, err);
+		const mark = (err as { mark?: { line?: number } }).mark;
+		const line = typeof mark?.line === 'number' ? mark.line + 1 : undefined;
+		throw new ParseError(`YAML parse error: ${(err as Error).message}`, err, line);
 	}
 
 	return validate(raw);

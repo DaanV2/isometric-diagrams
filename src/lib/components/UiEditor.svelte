@@ -11,9 +11,13 @@
 	interface Props {
 		spec: DiagramSpec;
 		onspecchange: (spec: DiagramSpec) => void;
+		/** Currently selected node id, kept in sync with the canvas. */
+		selectedId?: string | null;
+		/** Called when the editor selects/deselects a node (to highlight it on the canvas). */
+		onselect?: (id: string | null) => void;
 	}
 
-	let { spec, onspecchange }: Props = $props();
+	let { spec, onspecchange, selectedId = null, onselect }: Props = $props();
 
 	const NODE_TYPES: NodeType[] = [
 		'server',
@@ -57,6 +61,13 @@
 	// Track which node is expanded for editing
 	let expandedNodeIndex = $state<number | null>(null);
 	let expandedEdgeIndex = $state<number | null>(null);
+
+	// Expand the node selected on the canvas so the two views stay in sync.
+	$effect(() => {
+		if (selectedId == null) return;
+		const idx = spec.nodes.findIndex((n) => n.id === selectedId);
+		if (idx >= 0) expandedNodeIndex = idx;
+	});
 
 	function emit(updated: Partial<DiagramSpec>) {
 		onspecchange({ ...spec, ...updated });
@@ -111,6 +122,29 @@
 		updateNode(index, { [field]: value } as Partial<DiagramNode>);
 	}
 
+	/**
+	 * Rename a node's id, cascading the change to every edge endpoint and group
+	 * membership that referenced the old id so connections aren't orphaned.
+	 * Committed on change (blur), not per keystroke, to avoid partial-id churn.
+	 */
+	function renameNode(index: number, rawId: string) {
+		const newId = rawId.trim();
+		const oldId = spec.nodes[index].id;
+		if (!newId || newId === oldId) return;
+		const nodes = spec.nodes.map((n, i) => (i === index ? { ...n, id: newId } : n));
+		const edges = (spec.edges ?? []).map((e) => ({
+			...e,
+			from: e.from === oldId ? newId : e.from,
+			to: e.to === oldId ? newId : e.to
+		}));
+		const groups = (spec.groups ?? []).map((g) => ({
+			...g,
+			nodes: g.nodes.map((m) => (m === oldId ? newId : m))
+		}));
+		emit({ nodes, edges, groups });
+		onselect?.(newId);
+	}
+
 	function updateNodePosition(index: number, axis: 'x' | 'y', raw: string) {
 		const val = parseFloat(raw);
 		if (!isNaN(val)) {
@@ -146,7 +180,9 @@
 	}
 
 	function toggleNode(index: number) {
-		expandedNodeIndex = expandedNodeIndex === index ? null : index;
+		const willExpand = expandedNodeIndex !== index;
+		expandedNodeIndex = willExpand ? index : null;
+		onselect?.(willExpand ? spec.nodes[index].id : null);
 	}
 
 	function toggleEdge(index: number) {
@@ -208,7 +244,7 @@
 		{/if}
 
 		<ul class="item-list" aria-label="Nodes list">
-			{#each spec.nodes as node, i (node.id + i)}
+			{#each spec.nodes as node, i (i)}
 				<li class="item" class:expanded={expandedNodeIndex === i}>
 					<div class="item-header">
 						<button
@@ -243,8 +279,8 @@
 									class="field-input"
 									type="text"
 									value={node.id}
-									oninput={(e) =>
-										updateNodeField(i, 'id', (e.currentTarget as HTMLInputElement).value)}
+									onchange={(e) =>
+										renameNode(i, (e.currentTarget as HTMLInputElement).value)}
 									aria-label="Node ID"
 								/>
 							</div>
@@ -351,7 +387,7 @@
 		{/if}
 
 		<ul class="item-list" aria-label="Edges list">
-			{#each spec.edges ?? [] as edge, i (edge.from + edge.to + i)}
+			{#each spec.edges ?? [] as edge, i (i)}
 				<li class="item" class:expanded={expandedEdgeIndex === i}>
 					<div class="item-header">
 						<button

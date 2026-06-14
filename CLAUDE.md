@@ -126,6 +126,21 @@ so the CSS keyframe completes for paths of any length — never hardcode a dash
 cap. Apply it with `use:drawOnMount={pathData}`; it re-runs only when the path
 data changes.
 
+## Authoring diagnostics
+
+`parseYaml` only guarantees structural well-formedness (and throws a `ParseError`
+carrying a 1-based `line` for YAML syntax errors). Semantic problems that would
+otherwise fail silently — edges/groups referencing unknown node ids, duplicate
+ids, unknown enum values, self-loops, empty diagrams — are reported as
+**non-fatal** `Diagnostic`s by `lintSpec(spec)` in `src/lib/parser/lint.ts`.
+The editor shows them in a "Problems" panel; each diagnostic carries a `ref`
+token the page locates via `findTokenLine` to jump the textarea to the source.
+Valid type names come from `NODE_TYPE_NAMES` / `EDGE_TYPE_NAMES` in `theme.ts`
+(runtime source of truth, mirroring the unions).
+
+The UI editor and canvas share selection: `IsometricDiagram` and `UiEditor`
+both take an optional controlled `selectedId` + `onselect`, lifted to the page.
+
 ## Known open issues
 
 See the GitHub issue tracker. The earlier rendering items (#25 hardcoded
@@ -160,6 +175,13 @@ src/lib/renderer/__tests__/
   shapes-floor-tile.test.ts      ← floorTileGeometry
   shapes-group.test.ts           ← groupBoundary
   shapes-grid.test.ts            ← isoGridLines
+
+src/lib/parser/__tests__/
+  lint.test.ts                   ← lintSpec, findTokenLine
+  examples.test.ts               ← bundled example specs parse + lint clean
+
+src/lib/__tests__/
+  share.test.ts                  ← encodeShare / decodeShare round-trips
 ```
 
 ### Testing conventions

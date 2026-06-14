@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
+	import { lintSpec, findTokenLine, type Diagnostic } from '$lib/parser/lint.js';
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import UiEditor from '$lib/components/UiEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
@@ -16,10 +18,17 @@
 
 	let editorYaml = $state('');
 	let parseError = $state<string | null>(null);
+	let parseErrorLine = $state<number | null>(null);
 	let spec = $state<DiagramSpec | null>(null);
 	let activeExample = $state<string>('');
 	let editorVisible = $state(true);
 	let showGrid = $state(true);
+	/** Node selected on the canvas / in the UI editor (kept in sync between them). */
+	let selectedNodeId = $state<string | null>(null);
+	let yamlEl = $state<HTMLTextAreaElement | null>(null);
+
+	/** Non-fatal problems for the current valid spec (dangling refs, dup ids, …). */
+	const diagnostics = $derived<Diagnostic[]>(spec ? lintSpec(spec) : []);
 	/** Current editor mode: 'yaml' shows the raw YAML textarea, 'ui' shows the visual form editor */
 	let editorMode = $state<'ui' | 'yaml'>('yaml');
 
@@ -56,13 +65,46 @@
 	}
 
 	function compileYaml() {
-		parseError = null;
 		try {
 			spec = parseYaml(editorYaml);
+			parseError = null;
+			parseErrorLine = null;
 		} catch (e) {
-			parseError = e instanceof ParseError ? e.message : String(e);
+			if (e instanceof ParseError) {
+				parseError = e.message;
+				parseErrorLine = e.line ?? null;
+			} else {
+				parseError = String(e);
+				parseErrorLine = null;
+			}
 			spec = null;
 		}
+	}
+
+	/** Focus the YAML editor and select the given 1-based line. */
+	function gotoLine(line: number) {
+		const ta = yamlEl;
+		if (!ta) return;
+		const lines = editorYaml.split('\n');
+		const target = Math.min(Math.max(1, line), lines.length);
+		let start = 0;
+		for (let i = 0; i < target - 1; i++) start += lines[i].length + 1;
+		const end = start + (lines[target - 1]?.length ?? 0);
+		ta.focus();
+		ta.setSelectionRange(start, end);
+		const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+		ta.scrollTop = Math.max(0, (target - 1) * lh - ta.clientHeight / 2);
+	}
+
+	/** Jump to the source location of a diagnostic, switching to YAML mode if needed. */
+	async function gotoDiagnostic(d: Diagnostic) {
+		if (editorMode !== 'yaml') {
+			if (spec) editorYaml = dumpYaml(spec);
+			editorMode = 'yaml';
+			await tick();
+		}
+		const line = findTokenLine(editorYaml, d.ref);
+		if (line) gotoLine(line);
 	}
 
 	/** Debounced compile for the textarea so typing isn't blocked by re-parsing. */
@@ -252,6 +294,7 @@
 				{#if editorMode === 'yaml'}
 					<textarea
 						class="yaml-editor"
+						bind:this={yamlEl}
 						bind:value={editorYaml}
 						oninput={scheduleCompile}
 						spellcheck={false}
@@ -261,16 +304,58 @@
 						{#key parseError}
 							<div class="error-banner animate-pop" role="alert">
 								<span class="error-icon" aria-hidden="true">⚠</span>
-								<strong>Parse error:</strong>
-								{parseError}
+								<div class="error-body">
+									<strong>Parse error{parseErrorLine ? ` (line ${parseErrorLine})` : ''}:</strong>
+									{parseError}
+									{#if parseErrorLine}
+										<button
+											type="button"
+											class="goto-line-btn"
+											onclick={() => parseErrorLine && gotoLine(parseErrorLine)}
+										>
+											Go to line {parseErrorLine}
+										</button>
+									{/if}
+								</div>
 							</div>
 						{/key}
 					{/if}
 				{:else if spec}
-					<UiEditor {spec} onspecchange={handleUiSpecChange} />
+					<UiEditor
+						{spec}
+						onspecchange={handleUiSpecChange}
+						selectedId={selectedNodeId}
+						onselect={(id) => (selectedNodeId = id)}
+					/>
 				{:else}
 					<div class="ui-editor-placeholder">
 						<span>⚠ Fix the YAML first, then switch to UI editor.</span>
+					</div>
+				{/if}
+
+				{#if diagnostics.length > 0}
+					<div class="problems-panel" aria-label="Problems">
+						<div class="problems-header">
+							⚠ {diagnostics.length} problem{diagnostics.length === 1 ? '' : 's'}
+						</div>
+						<ul class="problems-list">
+							{#each diagnostics as d, i (i)}
+								<li>
+									<button
+										type="button"
+										class="problem problem--{d.severity}"
+										onclick={() => gotoDiagnostic(d)}
+										disabled={!d.ref}
+										title={d.ref ? 'Jump to source' : undefined}
+									>
+										<span class="problem-icon" aria-hidden="true"
+											>{d.severity === 'error' ? '⛔' : '⚠'}</span
+										>
+										<span class="problem-msg">{d.message}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
 					</div>
 				{/if}
 			</section>
@@ -279,7 +364,12 @@
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
 				<div class="diagram-wrapper animate-diagram-in">
-					<IsometricDiagram {spec} {showGrid} />
+					<IsometricDiagram
+						{spec}
+						{showGrid}
+						selectedId={selectedNodeId}
+						onselect={(id) => (selectedNodeId = id)}
+					/>
 				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
@@ -537,6 +627,82 @@
 		flex-shrink: 0;
 		line-height: 1.3;
 		animation: pulse-icon 1.5s ease-in-out infinite;
+	}
+
+	.error-body {
+		min-width: 0;
+	}
+
+	.goto-line-btn {
+		display: inline-block;
+		margin-top: 6px;
+		padding: 2px 8px;
+		border-radius: 5px;
+		border: 1px solid #fecaca;
+		background: transparent;
+		color: #fecaca;
+		cursor: pointer;
+		font-size: 0.85rem;
+	}
+	.goto-line-btn:hover {
+		background: rgba(254, 202, 202, 0.15);
+	}
+
+	/* ── Problems panel ───────────────────── */
+	.problems-panel {
+		flex-shrink: 0;
+		max-height: 35%;
+		overflow-y: auto;
+		border-top: 1px solid #21262d;
+		background: #0d1117;
+	}
+	.problems-header {
+		position: sticky;
+		top: 0;
+		padding: 6px 10px;
+		font-size: 11px;
+		font-weight: 600;
+		color: #d29922;
+		background: #161b22;
+		border-bottom: 1px solid #21262d;
+	}
+	.problems-list {
+		list-style: none;
+		margin: 0;
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.problem {
+		display: flex;
+		align-items: flex-start;
+		gap: 6px;
+		width: 100%;
+		padding: 5px 6px;
+		border: none;
+		border-radius: 5px;
+		background: transparent;
+		color: #c9d1d9;
+		cursor: pointer;
+		font-size: 11px;
+		line-height: 1.4;
+		text-align: left;
+	}
+	.problem:hover:not(:disabled) {
+		background: #21262d;
+	}
+	.problem:disabled {
+		cursor: default;
+	}
+	.problem-icon {
+		flex-shrink: 0;
+	}
+	.problem--error .problem-msg {
+		color: #ff9a9a;
+	}
+	.problem--warning .problem-msg {
+		color: #e3b341;
 	}
 
 	@keyframes pulse-icon {

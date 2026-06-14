@@ -19,9 +19,14 @@
 		width?: number;
 		/** Fixed viewport height in px. Omit to fill the parent container. */
 		height?: number;
+		/** Controlled selected node id. Omit for internal (uncontrolled) selection. */
+		selectedId?: string | null;
+		/** Called when the selected node changes (e.g. to sync the editor). */
+		onselect?: (id: string | null) => void;
 	}
 
-	let { spec, theme, showGrid: showGridProp, width, height }: Props = $props();
+	let { spec, theme, showGrid: showGridProp, width, height, selectedId, onselect }: Props =
+		$props();
 
 	const resolvedTheme = $derived(theme ?? spec.settings?.theme ?? 'dark');
 	const themeVars = $derived(resolvedTheme === 'light' ? lightTheme : darkTheme);
@@ -168,9 +173,13 @@
 		}
 	}
 
-	let selectedNodeId = $state<string | null>(null);
+	// Selection is controlled when `selectedId` is provided, otherwise internal.
+	let internalSelected = $state<string | null>(null);
+	const selectedNodeId = $derived(selectedId !== undefined ? selectedId : internalSelected);
 	function selectNode(id: string) {
-		selectedNodeId = selectedNodeId === id ? null : id;
+		const next = selectedNodeId === id ? null : id;
+		if (selectedId === undefined) internalSelected = next;
+		onselect?.(next);
 	}
 
 	/** Grid line paths for background decoration */
