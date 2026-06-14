@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DiagramSpec } from '../types/diagram.js';
 	import { boundingBox } from '../renderer/isometric.js';
-	import { isoGridLines, groupBoundary } from '../renderer/shapes.js';
+	import { isoGridLines, groupBoundary, sortEdgesByDepth } from '../renderer/shapes.js';
 	import { lightTheme, darkTheme } from '../renderer/theme.js';
 	import IsometricNode from './IsometricNode.svelte';
 	import IsometricEdge from './IsometricEdge.svelte';
@@ -65,6 +65,9 @@
 			(a, b) => a.position.x + a.position.y - (b.position.x + b.position.y)
 		)
 	);
+
+	/** Sort edges back-to-front by midpoint depth (same x+y heuristic as nodes) */
+	const sortedEdges = $derived(sortEdgesByDepth(spec.edges ?? [], spec.nodes));
 
 	/** Group boundary polygons */
 	const groupPolygons = $derived.by(() => {
@@ -143,8 +146,8 @@
 			<IsometricFlatArrow {arrow} {tileSize} offsetX={0} offsetY={0} />
 		{/each}
 
-		<!-- Edges (drawn below nodes) -->
-		{#each spec.edges ?? [] as edge (edge.id ?? `${edge.from}-${edge.to}`)}
+		<!-- Edges (drawn below nodes, sorted back-to-front) -->
+		{#each sortedEdges as edge (edge.id ?? `${edge.from}-${edge.to}`)}
 			<IsometricEdge
 				{edge}
 				nodes={spec.nodes}
