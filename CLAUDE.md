@@ -58,6 +58,28 @@ bind its named fields into the SVG template. They should contain **no raw
 `isoToScreen` / `boxPaths` calls** — if you need a new shape, add it to
 `shapes.ts` first.
 
+## Diagram viewport (pan / zoom / export)
+
+`IsometricDiagram` renders a `position:relative` viewport `<div>` that fills its
+parent, an `<svg width=100% height=100%>` whose `viewBox` is driven by a
+pan/zoom view, and fixed HTML overlays (title, zoom controls, export buttons,
+node-info) that do **not** pan/zoom.
+
+- The `viewBox` is kept at the viewport's aspect ratio (`vpW/zoom × vpH/zoom`)
+  so screen↔world mapping is linear; this makes wheel-zoom-around-cursor exact.
+- `userZoom` / `userCenter` are `null` until the user interacts — the view then
+  follows the auto-fit (`fitZoom`/`fitCenter`) derived from the content `bbox`.
+  The ⊡ Fit button resets them to `null`.
+- Pan starts only when the pointerdown target is not inside a `.iso-node`, so
+  node clicks still select.
+- Export lives in `src/lib/export.ts` (`downloadSvg` / `downloadPng`). It clones
+  the live `<svg>`, inlines each element's **computed** style (scoped component
+  CSS and CSS vars don't survive serialization), frames it to the content
+  bounds, and paints a background.
+- Sharing/persistence: the page persists the doc to `localStorage` and encodes
+  permalinks via `src/lib/share.ts` (`encodeShare`/`decodeShare`, base64url).
+  Restore order on load: `#d=…` permalink → last session → default example.
+
 ## Svelte 5 reactivity rules
 
 - Use `$derived.by(() => { ... })` for computed values whose logic is more than

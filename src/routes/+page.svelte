@@ -3,6 +3,7 @@
 	import IsometricDiagram from '$lib/components/IsometricDiagram.svelte';
 	import UiEditor from '$lib/components/UiEditor.svelte';
 	import type { DiagramSpec } from '$lib/types/diagram.js';
+	import { encodeShare, decodeShare } from '$lib/share.js';
 	import { base } from '$app/paths';
 
 	// ── Example definitions ──────────────────────────────────────
@@ -17,8 +18,6 @@
 	let parseError = $state<string | null>(null);
 	let spec = $state<DiagramSpec | null>(null);
 	let activeExample = $state<string>('');
-	let diagramWidth = $state(860);
-	let diagramHeight = $state(520);
 	let editorVisible = $state(true);
 	let showGrid = $state(true);
 	/** Current editor mode: 'yaml' shows the raw YAML textarea, 'ui' shows the visual form editor */
@@ -28,6 +27,20 @@
 	const COMPILE_DEBOUNCE_MS = 200;
 	let compileTimer: ReturnType<typeof setTimeout> | undefined;
 
+	/** localStorage key for the last-edited document. */
+	const STORAGE_KEY = 'isometric-diagrams:doc';
+	/** Set once the initial document has been restored, so we don't persist '' first. */
+	let restored = $state(false);
+	let shareMsg = $state<string | null>(null);
+	let shareMsgTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Remove a #d=… permalink from the address bar once the doc diverges from it. */
+	function clearShareHash() {
+		if (typeof window !== 'undefined' && window.location.hash.includes('d=')) {
+			history.replaceState(null, '', window.location.pathname + window.location.search);
+		}
+	}
+
 	async function loadExample(file: string) {
 		try {
 			const res = await fetch(`${base}/examples/${file}`);
@@ -35,6 +48,7 @@
 			const text = await res.text();
 			editorYaml = text;
 			activeExample = file;
+			clearShareHash();
 			compileNow();
 		} catch (e) {
 			parseError = `Could not load example: ${(e as Error).message}`;
@@ -53,6 +67,7 @@
 
 	/** Debounced compile for the textarea so typing isn't blocked by re-parsing. */
 	function scheduleCompile() {
+		clearShareHash();
 		clearTimeout(compileTimer);
 		compileTimer = setTimeout(compileYaml, COMPILE_DEBOUNCE_MS);
 	}
@@ -82,9 +97,74 @@
 		spec = newSpec;
 	}
 
-	// Load the first example on mount using Svelte 5 effect
+	/** The YAML text for the current document, dumping the spec when in UI mode. */
+	function currentYaml(): string {
+		return editorMode === 'ui' && spec ? dumpYaml(spec) : editorYaml;
+	}
+
+	/** Build a shareable permalink for the current document and copy it. */
+	async function share() {
+		const url = `${window.location.origin}${window.location.pathname}#d=${encodeShare(currentYaml())}`;
+		try {
+			history.replaceState(null, '', url);
+		} catch {
+			/* history not available */
+		}
+		let msg = 'Link copied to clipboard';
+		try {
+			await navigator.clipboard.writeText(url);
+		} catch {
+			msg = 'Link added to the address bar';
+		}
+		shareMsg = msg;
+		clearTimeout(shareMsgTimer);
+		shareMsgTimer = setTimeout(() => (shareMsg = null), 2200);
+	}
+
+	/** Restore the initial document: permalink → last session → default example. */
+	async function init() {
+		const hashMatch = window.location.hash.match(/[#&]d=([^&]+)/);
+		if (hashMatch) {
+			try {
+				editorYaml = decodeShare(hashMatch[1]);
+				activeExample = '';
+				compileNow();
+				restored = true;
+				return;
+			} catch {
+				/* malformed permalink — fall through */
+			}
+		}
+		try {
+			const saved = localStorage.getItem(STORAGE_KEY);
+			if (saved && saved.trim()) {
+				editorYaml = saved;
+				activeExample = '';
+				compileNow();
+				restored = true;
+				return;
+			}
+		} catch {
+			/* storage unavailable */
+		}
+		await loadExample(EXAMPLES[0].file);
+		restored = true;
+	}
+
+	// One-time restore on mount (effects only run in the browser).
 	$effect(() => {
-		loadExample(EXAMPLES[0].file);
+		init();
+	});
+
+	// Persist edits to localStorage once the initial document is restored.
+	$effect(() => {
+		const doc = editorYaml;
+		if (!restored) return;
+		try {
+			localStorage.setItem(STORAGE_KEY, doc);
+		} catch {
+			/* storage full or unavailable */
+		}
 	});
 </script>
 
@@ -140,7 +220,20 @@
 		>
 			{showGrid ? '⊞ Grid' : '⊟ Grid'}
 		</button>
+		<button
+			class="share-btn"
+			onclick={share}
+			disabled={!spec && !editorYaml.trim()}
+			aria-label="Copy a shareable link"
+			title="Copy a shareable link to this diagram"
+		>
+			🔗 Share
+		</button>
 	</header>
+
+	{#if shareMsg}
+		<div class="share-toast" role="status" aria-live="polite">{shareMsg}</div>
+	{/if}
 
 	<main>
 		{#if editorVisible}
@@ -185,8 +278,8 @@
 
 		<section class="diagram-panel" aria-label="Diagram preview">
 			{#if spec}
-				<div class="diagram-wrapper animate-diagram-in" style="position: relative;">
-					<IsometricDiagram {spec} {showGrid} width={diagramWidth} height={diagramHeight} />
+				<div class="diagram-wrapper animate-diagram-in">
+					<IsometricDiagram {spec} {showGrid} />
 				</div>
 			{:else if !parseError}
 				<div class="placeholder">Loading diagram…</div>
@@ -331,6 +424,40 @@
 		color: #3fb950;
 	}
 
+	.share-btn {
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid #30363d;
+		background: transparent;
+		color: #8b949e;
+		cursor: pointer;
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.share-btn:hover:not(:disabled) {
+		background: #21262d;
+		color: #e6edf3;
+	}
+	.share-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.share-toast {
+		position: fixed;
+		top: 56px;
+		right: 16px;
+		z-index: 10;
+		padding: 8px 14px;
+		border-radius: 8px;
+		background: #1d3557;
+		border: 1px solid #4299e1;
+		color: #cfe8ff;
+		font-size: 12px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		animation: pop 0.3s ease-out;
+	}
+
 	/* ── Main layout ──────────────────────── */
 	main {
 		display: flex;
@@ -456,15 +583,16 @@
 	.diagram-panel {
 		flex: 1;
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: auto;
+		overflow: hidden;
 		padding: 16px;
 		background: #0d1117;
+		min-width: 0;
 	}
 
 	.diagram-wrapper {
-		display: inline-block;
+		position: relative;
+		width: 100%;
+		height: 100%;
 		border-radius: 8px;
 		overflow: hidden;
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
