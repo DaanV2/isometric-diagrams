@@ -157,17 +157,17 @@ test.describe('Isometric Diagrams App', () => {
 		await expect(wrapper).toHaveClass(/animate-diagram-in/);
 	});
 
-	test('edge paths have animation class', async ({ page }) => {
+	test('edge ribbons render a filled band', async ({ page }) => {
 		await page.goto('/');
 		await page.waitForSelector('svg.iso-diagram');
 
-		const edgePaths = page.locator('.iso-edge .edge-path');
-		const count = await edgePaths.count();
+		const edgeBands = page.locator('.iso-edge .edge-band');
+		const count = await edgeBands.count();
 		expect(count).toBeGreaterThan(0);
 
-		// Verify the class is actually present on each path
-		const firstPath = edgePaths.first();
-		await expect(firstPath).toHaveClass(/edge-path/);
+		// Verify the class is actually present on each band
+		const firstBand = edgeBands.first();
+		await expect(firstBand).toHaveClass(/edge-band/);
 	});
 
 	test('SVG contains edges connecting nodes', async ({ page }) => {

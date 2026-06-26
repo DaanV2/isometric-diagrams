@@ -2,7 +2,6 @@
 	import type { DiagramEdge, DiagramNode } from '../types/diagram.js';
 	import { edgeGeometry, type EdgeGeometry } from '../renderer/shapes.js';
 	import { getEdgeColour } from '../renderer/theme.js';
-	import { drawOnMount } from '../actions/draw-on-mount.js';
 
 	interface Props {
 		edge: DiagramEdge;
@@ -19,6 +18,7 @@
 	const toNode = $derived(nodeMap.get(edge.to));
 	const colour = $derived(edge.style?.color ?? getEdgeColour(edge.type));
 	const directed = $derived(edge.directed !== false); // default true
+	const dashed = $derived(edge.type === 'dependency');
 
 	const geo = $derived.by((): EdgeGeometry | null => {
 		if (!fromNode || !toNode) return null;
@@ -34,30 +34,37 @@
 		filter="url(#iso-edge-glow)"
 		style="transform: translate({offsetX}px, {offsetY}px)"
 	>
-		{#if edge.type === 'dependency'}
-			<path
-				d={geo.path}
-				class="edge-path edge-path--dashed"
-				fill="none"
-				stroke={colour}
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-		{:else}
-			<path
-				use:drawOnMount={geo.path}
-				d={geo.path}
-				class="edge-path"
-				fill="none"
-				stroke={colour}
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-		{/if}
+		<!-- Ribbon band lying flat on the ground -->
+		<path
+			d={geo.path}
+			class="edge-band"
+			fill={colour}
+			fill-opacity={dashed ? 0.42 : 0.8}
+			stroke={colour}
+			stroke-opacity="0.95"
+			stroke-width="0.75"
+			stroke-linejoin="round"
+		/>
+		<!-- Gloss spine down the ribbon's centre -->
+		<path
+			d={geo.spine}
+			class="edge-spine"
+			class:edge-spine--dashed={dashed}
+			fill="none"
+			stroke="#ffffff"
+			stroke-opacity="0.32"
+			stroke-width="1.25"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		/>
 		{#if directed && geo.arrowPoints}
-			<polygon points={geo.arrowPoints} fill={colour} stroke={colour} stroke-width="1" stroke-linejoin="round" />
+			<polygon
+				points={geo.arrowPoints}
+				fill={colour}
+				stroke={colour}
+				stroke-width="0.75"
+				stroke-linejoin="round"
+			/>
 		{/if}
 		{#if geo.midPoint}
 			<text
@@ -75,29 +82,20 @@
 {/if}
 
 <style>
-	.edge-path {
-		opacity: 0.9;
-		animation: draw-line 0.8s ease-out forwards;
+	.iso-edge {
+		animation: edge-fade-in 0.45s ease-out both;
 	}
 
-	.edge-path--dashed {
-		stroke-dasharray: 5 3;
-		stroke-dashoffset: 0;
-		animation: fade-in-edge 0.6s ease-out forwards;
+	.edge-spine--dashed {
+		stroke-dasharray: 4 4;
 	}
 
-	@keyframes draw-line {
-		to {
-			stroke-dashoffset: 0;
-		}
-	}
-
-	@keyframes fade-in-edge {
+	@keyframes edge-fade-in {
 		from {
 			opacity: 0;
 		}
 		to {
-			opacity: 0.85;
+			opacity: 1;
 		}
 	}
 

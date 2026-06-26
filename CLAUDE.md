@@ -25,7 +25,7 @@ Low-level functions that convert grid coordinates to screen coordinates.
 **No diagram types here.** Takes raw numbers, returns numbers or SVG path strings.
 
 Key functions: `isoToScreen`, `screenToIso` (inverse, for drag-to-place),
-`boxPaths`, `edgePath`, `arrowHead`, `flatArrowPath`, `flatArrowHead`,
+`boxPaths`, `ribbonPath`, `polylinePath`, `ribbonArrowHead`, `insetRouteEnds`,
 `floorTilePath`, `tilePath`, `boundingBox`.
 
 Coordinate system:
@@ -43,8 +43,8 @@ point strings, `ScreenPoint` anchors).
 | Function | Returns | Used by |
 |---|---|---|
 | `nodeBox(node, tileSize)` | `NodeBox` — face paths + label/icon positions | `IsometricNode` |
-| `edgeGeometry(from, to, directed, hasLabel, tileSize)` | `EdgeGeometry` — path + arrowhead + midpoint | `IsometricEdge` |
-| `flatArrowGeometry(arrow, tileSize)` | `FlatArrowGeometry` — path + arrowhead + midpoint | `IsometricFlatArrow` |
+| `edgeGeometry(from, to, directed, hasLabel, tileSize)` | `EdgeGeometry` — ribbon band path + gloss spine + arrowhead + midpoint | `IsometricEdge` |
+| `flatArrowGeometry(arrow, tileSize)` | `FlatArrowGeometry` — ribbon band path + gloss spine + arrowhead + midpoint | `IsometricFlatArrow` |
 | `floorTileGeometry(tile, tileSize)` | `FloorTileGeometry` — outline path + label position | `IsometricFloorTile` |
 | `groupBoundary(members, tileSize, gpad?)` | `GroupBoundary` — isometric parallelogram points + label anchor | `IsometricDiagram` |
 | `isoGridLines(nodes, tileSize)` | `string[]` — one SVG path per grid line | `IsometricDiagram` |
@@ -139,21 +139,27 @@ tiles' footprints. The polygon is painted behind everything; the group label is
 drawn in the label overlay pass so it stays legible. Computed via
 `groupBoundary()` in `shapes.ts`.
 
-## Edge routing
+## Edge & arrow ribbons
 
-Edges use an L-shaped two-segment path: `(fromX,fromY)` → `(toX,fromY)` →
-`(toX,toY)`. Arrowheads are aligned to the **last segment** (the Y-direction
-leg arriving at the destination). The `arrowHead()` base point is
-`isoToScreen(toX, fromY, ...)` — not `fromX, toY`.
+Edges and flat arrows render as flat **ribbons lying on the ground plane**, not
+thin floating strokes. A ribbon is a filled band built by offsetting the route
+**in grid (ground) space** by `RIBBON_HALF_WIDTH` grid units on each side, then
+projecting — so the band foreshortens like real tape on the floor instead of
+keeping a constant screen width. Built by `ribbonPath()` in `isometric.ts`
+(mitred joins keep corners crisp). A thin white "gloss spine" (`polylinePath()`
+down the centreline) sells the flat-strip look; the arrowhead is a flat,
+ground-plane barbed chevron shaped in grid space (`ribbonArrowHead()`).
 
-## Draw-in animation
-
-Edges and flat arrows animate by "drawing" their path on mount. The
-`drawOnMount` Svelte action (`src/lib/actions/draw-on-mount.ts`) sets
-`stroke-dasharray` / `stroke-dashoffset` to the path's real `getTotalLength()`
-so the CSS keyframe completes for paths of any length — never hardcode a dash
-cap. Apply it with `use:drawOnMount={pathData}`; it re-runs only when the path
-data changes.
+- **Edge route**: an L-shaped two-segment path `(fromX,fromY)` → `(toX,fromY)` →
+  `(toX,toY)`, laid flat at `z = (fromZ+toZ)/2`. The arrowhead points along the
+  **last segment** (the Y-direction leg arriving at the destination).
+- **Ends are inset** out of the cube footprints via `insetRouteEnds()` (grid
+  units) so a directed arrowhead lands just outside the destination cube's near
+  face instead of being buried under the box. Edges paint *below* the node
+  bodies (painter's order), so the ribbon passes behind cubes and the arrowhead
+  tucks into the near face.
+- Ribbons fade in on mount (group `opacity` keyframe); dependency edges keep
+  their dashed read via a dashed gloss spine.
 
 ## Authoring diagnostics
 
@@ -198,8 +204,7 @@ src/lib/renderer/__tests__/
   isometric-projection.test.ts   ← isoToScreen
   isometric-inverse.test.ts      ← screenToIso
   isometric-boxes.test.ts        ← tilePath, boxPaths
-  isometric-edges.test.ts        ← edgePath, arrowHead
-  isometric-flat-arrows.test.ts  ← flatArrowPath, flatArrowHead
+  isometric-ribbon.test.ts       ← ribbonPath, polylinePath, ribbonArrowHead, insetRouteEnds
   isometric-floor.test.ts        ← floorTilePath, boundingBox
   shapes-node.test.ts            ← NODE_HEIGHT, nodeBox
   shapes-sort.test.ts            ← sortEdgesByDepth
