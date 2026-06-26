@@ -17,10 +17,10 @@ describe('edgeGeometry', () => {
 		expect(edgeGeometry(from, to, false, false, TILE).arrowPoints).toBe('');
 	});
 
-	it('directed edge → three arrowhead coordinate pairs', () => {
+	it('directed edge → four arrowhead coordinate pairs', () => {
 		const { arrowPoints } = edgeGeometry(from, to, true, false, TILE);
 		expect(arrowPoints).not.toBe('');
-		expect(arrowPoints.split(' ').length).toBe(3);
+		expect(arrowPoints.split(' ').length).toBe(4);
 	});
 
 	it('no label → midPoint is null', () => {
@@ -46,12 +46,17 @@ describe('edgeGeometry', () => {
 		expect(noZ.path).toBe(withZ.path);
 	});
 
-	it('arrowhead tip is at the destination node screen position', () => {
+	it('arrowhead tip is inset short of the destination node centre', () => {
 		const { arrowPoints } = edgeGeometry(from, to, true, false, TILE);
-		const expected = isoToScreen(2, 2, 0.5, { tileSize: TILE });
+		const centre = isoToScreen(2, 2, 0.5, { tileSize: TILE });
+		const base = isoToScreen(2, 0, 0.5, { tileSize: TILE });
 		const [tipStr] = arrowPoints.split(' ');
 		const [tx, ty] = tipStr.split(',').map(Number);
-		expect(tx).toBeCloseTo(expected.x, 5);
-		expect(ty).toBeCloseTo(expected.y, 5);
+		// Pulled back from the node centre so the arrowhead clears the cube body…
+		expect(Math.hypot(tx - centre.x, ty - centre.y)).toBeCloseTo(TILE * 0.62, 5);
+		// …along the arriving leg toward the source side.
+		expect(Math.hypot(tx - base.x, ty - base.y)).toBeLessThan(
+			Math.hypot(centre.x - base.x, centre.y - base.y)
+		);
 	});
 });

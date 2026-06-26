@@ -31,6 +31,7 @@
 		class="iso-edge"
 		data-edge-from={edge.from}
 		data-edge-to={edge.to}
+		filter="url(#iso-edge-glow)"
 		style="transform: translate({offsetX}px, {offsetY}px)"
 	>
 		{#if edge.type === 'dependency'}
@@ -56,7 +57,7 @@
 			/>
 		{/if}
 		{#if directed && geo.arrowPoints}
-			<polygon points={geo.arrowPoints} fill={colour} opacity="0.85" />
+			<polygon points={geo.arrowPoints} fill={colour} stroke={colour} stroke-width="1" stroke-linejoin="round" />
 		{/if}
 		{#if geo.midPoint}
 			<text

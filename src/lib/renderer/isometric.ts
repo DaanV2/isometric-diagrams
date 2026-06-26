@@ -114,8 +114,44 @@ export function boxPaths(
 }
 
 /**
- * Compute an SVG polyline from a source grid position to a target grid position
- * using a two-segment L-shaped path in isometric space.
+ * How far (as a fraction of tileSize) an edge's endpoint is pulled back along
+ * its arriving leg. Because edges paint *below* the node cubes, a connector
+ * aimed at a node's centre would bury its arrowhead inside the destination box.
+ * Insetting the tip lands the arrowhead just outside the cube's near face where
+ * it is actually visible.
+ */
+const EDGE_END_INSET = 0.62;
+
+/**
+ * Given the screen-space `base` an edge arrives from and the `rawTip` at the
+ * destination node's centre, return the inset tip (pulled back out of the cube)
+ * and the unit direction of travel. When the leg is degenerate (zero length)
+ * the tip is left at the destination and the direction is zero.
+ */
+function arrowArrival(
+	base: ScreenPoint,
+	rawTip: ScreenPoint,
+	cfg: IsoConfig
+): { tip: ScreenPoint; ux: number; uy: number } {
+	const dx = rawTip.x - base.x;
+	const dy = rawTip.y - base.y;
+	const len = Math.sqrt(dx * dx + dy * dy);
+	if (len < 1e-6) return { tip: rawTip, ux: 0, uy: 0 };
+	const ux = dx / len;
+	const uy = dy / len;
+	// Never inset past the leg's own start, so very short edges keep an endpoint.
+	const gap = Math.min(cfg.tileSize * EDGE_END_INSET, len * 0.9);
+	return { tip: { x: rawTip.x - ux * gap, y: rawTip.y - uy * gap }, ux, uy };
+}
+
+/**
+ * Compute an SVG path from a source grid position to a target grid position
+ * using a two-segment L-shaped route in isometric space, with a rounded elbow
+ * at the corner. The endpoint is inset out of the destination cube (see
+ * {@link arrowArrival}) so a directed edge's arrowhead reads clearly.
+ *
+ * When a leg is too short to round (or degenerate), the corner falls back to a
+ * sharp `M…L…L` elbow.
  */
 export function edgePath(
 	fromX: number,
@@ -124,16 +160,66 @@ export function edgePath(
 	toX: number,
 	toY: number,
 	toZ: number,
-	cfg: IsoConfig
+	cfg: IsoConfig,
+	radius = cfg.tileSize * 0.4
 ): string {
 	const from = isoToScreen(fromX, fromY, fromZ + 0.5, cfg);
-	const mid = isoToScreen(toX, fromY, (fromZ + toZ) / 2 + 0.5, cfg);
-	const to = isoToScreen(toX, toY, toZ + 0.5, cfg);
-	return `M ${from.x},${from.y} L ${mid.x},${mid.y} L ${to.x},${to.y}`;
+	const corner = isoToScreen(toX, fromY, (fromZ + toZ) / 2 + 0.5, cfg);
+	// Inset the endpoint along the same arriving leg the arrowhead uses, so the
+	// line meets the arrowhead exactly.
+	const base = isoToScreen(toX, fromY, toZ + 0.5, cfg);
+	const rawTo = isoToScreen(toX, toY, toZ + 0.5, cfg);
+	const { tip: to } = arrowArrival(base, rawTo, cfg);
+
+	const v1x = corner.x - from.x;
+	const v1y = corner.y - from.y;
+	const v2x = to.x - corner.x;
+	const v2y = to.y - corner.y;
+	const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
+	const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
+
+	// Cap the fillet so it never eats more than half of either leg.
+	const r = Math.min(radius, len1 / 2, len2 / 2);
+	if (!(r > 0.5) || len1 === 0 || len2 === 0) {
+		return `M ${from.x},${from.y} L ${corner.x},${corner.y} L ${to.x},${to.y}`;
+	}
+
+	const p1x = corner.x - (v1x / len1) * r;
+	const p1y = corner.y - (v1y / len1) * r;
+	const p2x = corner.x + (v2x / len2) * r;
+	const p2y = corner.y + (v2y / len2) * r;
+	return `M ${from.x},${from.y} L ${p1x},${p1y} Q ${corner.x},${corner.y} ${p2x},${p2y} L ${to.x},${to.y}`;
 }
 
 /**
- * Compute an SVG arrowhead polygon at the endpoint of an edge.
+ * Build an SVG arrowhead polygon for a barbed chevron, pointing from `tip`
+ * along the unit direction (`ux`, `uy`). The shape has a tip, two swept-back
+ * barbs and a concave notch at the rear so it reads as a crisp arrow rather
+ * than a flat triangle. `size` is the length from tip to barb, `width` the
+ * half-spread of the barbs. Returns a <polygon> `points` string.
+ */
+function arrowPolygon(
+	tip: ScreenPoint,
+	ux: number,
+	uy: number,
+	size: number,
+	width: number
+): string {
+	const px = -uy; // perpendicular unit
+	const py = ux;
+	const notch = size * 0.42; // how deep the rear concavity cuts in
+	return [
+		`${tip.x},${tip.y}`,
+		`${tip.x - ux * size - px * width},${tip.y - uy * size - py * width}`,
+		`${tip.x - ux * notch},${tip.y - uy * notch}`,
+		`${tip.x - ux * size + px * width},${tip.y - uy * size + py * width}`
+	].join(' ');
+}
+
+/**
+ * Compute an SVG arrowhead polygon at the endpoint of an edge. The tip is inset
+ * out of the destination cube (matching {@link edgePath}) and the arrowhead is
+ * sized relative to `tileSize` so it stays proportional at any scale.
  * Returns a `points` string suitable for a <polygon> element.
  */
 export function arrowHead(
@@ -144,20 +230,10 @@ export function arrowHead(
 	fromY: number,
 	cfg: IsoConfig
 ): string {
-	const tip = isoToScreen(toX, toY, toZ + 0.5, cfg);
 	const base = isoToScreen(toX, fromY, toZ + 0.5, cfg);
-	const dx = tip.x - base.x;
-	const dy = tip.y - base.y;
-	const len = Math.sqrt(dx * dx + dy * dy) || 1;
-	const ux = dx / len;
-	const uy = dy / len;
-	const size = 8;
-	const w = 4;
-	return [
-		`${tip.x},${tip.y}`,
-		`${tip.x - ux * size - uy * w},${tip.y - uy * size + ux * w}`,
-		`${tip.x - ux * size + uy * w},${tip.y - uy * size - ux * w}`
-	].join(' ');
+	const rawTip = isoToScreen(toX, toY, toZ + 0.5, cfg);
+	const { tip, ux, uy } = arrowArrival(base, rawTip, cfg);
+	return arrowPolygon(tip, ux, uy, cfg.tileSize * 0.26, cfg.tileSize * 0.13);
 }
 
 /**
@@ -197,13 +273,9 @@ export function flatArrowHead(
 	const len = Math.sqrt(dx * dx + dy * dy) || 1;
 	const ux = dx / len;
 	const uy = dy / len;
-	const size = 10;
-	const w = 5;
-	return [
-		`${tip.x},${tip.y}`,
-		`${tip.x - ux * size - uy * w},${tip.y - uy * size + ux * w}`,
-		`${tip.x - ux * size + uy * w},${tip.y - uy * size - ux * w}`
-	].join(' ');
+	// Flat arrows sit on the ground (never buried under a cube), so the tip stays
+	// at the destination. Sized a touch larger than edge arrowheads.
+	return arrowPolygon(tip, ux, uy, cfg.tileSize * 0.3, cfg.tileSize * 0.15);
 }
 
 /**
