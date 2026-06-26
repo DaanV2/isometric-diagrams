@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { DiagramFlatArrow } from '../types/diagram.js';
 	import { flatArrowGeometry } from '../renderer/shapes.js';
-	import { drawOnMount } from '../actions/draw-on-mount.js';
 
 	interface Props {
 		arrow: DiagramFlatArrow;
@@ -14,6 +13,7 @@
 
 	const colour = $derived(arrow.style?.color ?? '#f6ad55');
 	const directed = $derived(arrow.directed !== false);
+	const opacity = $derived(arrow.style?.opacity ?? 0.85);
 	const geo = $derived(flatArrowGeometry(arrow, tileSize));
 </script>
 
@@ -22,24 +22,35 @@
 	filter="url(#iso-edge-glow)"
 	style="transform: translate({offsetX}px, {offsetY}px)"
 >
+	<!-- Ribbon band lying flat on the ground -->
 	<path
-		use:drawOnMount={geo.path}
 		d={geo.path}
-		class="flat-arrow-path"
-		fill="none"
+		class="flat-arrow-band"
+		fill={colour}
+		fill-opacity={opacity}
 		stroke={colour}
-		stroke-width="2"
+		stroke-opacity="0.95"
+		stroke-width="0.75"
+		stroke-linejoin="round"
+	/>
+	<!-- Gloss spine down the ribbon's centre -->
+	<path
+		d={geo.spine}
+		class="flat-arrow-spine"
+		fill="none"
+		stroke="#ffffff"
+		stroke-opacity="0.3"
+		stroke-width="1.25"
 		stroke-linecap="round"
-		opacity={arrow.style?.opacity ?? 0.9}
 	/>
 	{#if directed && geo.arrowPoints}
 		<polygon
 			points={geo.arrowPoints}
 			fill={colour}
+			fill-opacity={opacity}
 			stroke={colour}
-			stroke-width="1"
+			stroke-width="0.75"
 			stroke-linejoin="round"
-			opacity={arrow.style?.opacity ?? 0.9}
 		/>
 	{/if}
 	{#if geo.midPoint}
@@ -57,15 +68,16 @@
 </g>
 
 <style>
-	.flat-arrow-path {
-		/* stroke-dasharray / dashoffset are set to the true path length by the
-		   drawOnMount action so the draw animation works for any length. */
-		animation: draw-flat-arrow 0.8s ease-out forwards;
+	.iso-flat-arrow {
+		animation: flat-arrow-fade-in 0.45s ease-out both;
 	}
 
-	@keyframes draw-flat-arrow {
+	@keyframes flat-arrow-fade-in {
+		from {
+			opacity: 0;
+		}
 		to {
-			stroke-dashoffset: 0;
+			opacity: 1;
 		}
 	}
 

@@ -14,11 +14,12 @@ import type { DiagramNode, DiagramEdge, DiagramFlatArrow, DiagramFloorTile } fro
 import {
 	isoToScreen,
 	boxPaths,
-	edgePath,
-	arrowHead,
-	flatArrowPath,
-	flatArrowHead,
+	ribbonPath,
+	polylinePath,
+	ribbonArrowHead,
+	insetRouteEnds,
 	floorTilePath,
+	type GridPoint,
 	type ScreenPoint
 } from './isometric.js';
 
@@ -98,16 +99,25 @@ export function sortEdgesByDepth(edges: DiagramEdge[], nodeMap: Map<string, Diag
 
 // ─── Edge ────────────────────────────────────────────────────────────────────
 
+/** How far (grid units) a ribbon end is pulled out of the cube it connects. */
+const EDGE_START_INSET = 0.45;
+const EDGE_END_INSET = 0.62;
+/** Arrowhead size for connector ribbons, in grid units. */
+const ARROW_LENGTH = 0.52;
+const ARROW_HALF_WIDTH = 0.27;
+
 export interface EdgeGeometry {
-	/** SVG path for the L-shaped connector line. */
+	/** Closed SVG path for the filled ribbon band lying on the ground. */
 	path: string;
+	/** SVG path for the thin gloss spine running down the ribbon's centre. */
+	spine: string;
 	/** SVG `points` string for the arrowhead polygon; empty string when undirected. */
 	arrowPoints: string;
 	/** Screen-space midpoint for an optional edge label; null when not needed. */
 	midPoint: ScreenPoint | null;
 }
 
-/** Compute the connector path, arrowhead, and label midpoint for an edge. */
+/** Compute the ribbon band, spine, arrowhead, and label midpoint for an edge. */
 export function edgeGeometry(
 	from: DiagramNode,
 	to: DiagramNode,
@@ -117,65 +127,74 @@ export function edgeGeometry(
 ): EdgeGeometry {
 	const fz = from.position.z ?? 0;
 	const tz = to.position.z ?? 0;
+	// The ribbon lies flat on the ground plane between the two cube bases.
+	const z = (fz + tz) / 2;
+	const cfg = { tileSize };
 
-	const path = edgePath(
-		from.position.x,
-		from.position.y,
-		fz,
-		to.position.x,
-		to.position.y,
-		tz,
-		{ tileSize }
-	);
+	// L-shaped route in grid space: along X first, then along Y into the target.
+	const route: GridPoint[] = [
+		{ x: from.position.x, y: from.position.y },
+		{ x: to.position.x, y: from.position.y },
+		{ x: to.position.x, y: to.position.y }
+	];
+	const inset = insetRouteEnds(route, EDGE_START_INSET, EDGE_END_INSET);
 
+	const path = ribbonPath(inset, z, cfg);
+	const spine = polylinePath(inset, z, cfg);
+
+	// Arrowhead points along the last leg, tip at the inset route end.
+	const tip = inset[inset.length - 1];
+	const prev = inset[inset.length - 2];
 	const arrowPoints = directed
-		? arrowHead(to.position.x, to.position.y, tz, from.position.x, from.position.y, { tileSize })
+		? ribbonArrowHead(prev, tip, z, cfg, ARROW_LENGTH, ARROW_HALF_WIDTH)
 		: '';
 
 	const midPoint = hasLabel
 		? isoToScreen(
 				(from.position.x + to.position.x) / 2,
 				(from.position.y + to.position.y) / 2,
-				(fz + tz) / 2 + 0.5,
-				{ tileSize }
+				z,
+				cfg
 			)
 		: null;
 
-	return { path, arrowPoints, midPoint };
+	return { path, spine, arrowPoints, midPoint };
 }
 
 // ─── Flat arrow ──────────────────────────────────────────────────────────────
 
 export interface FlatArrowGeometry {
-	/** SVG path for the ground-plane connector line. */
+	/** Closed SVG path for the filled ribbon band lying on the ground. */
 	path: string;
+	/** SVG path for the thin gloss spine running down the ribbon's centre. */
+	spine: string;
 	/** SVG `points` string for the arrowhead polygon; empty string when undirected. */
 	arrowPoints: string;
 	/** Screen-space midpoint for an optional label; null when not needed. */
 	midPoint: ScreenPoint | null;
 }
 
-/** Compute the connector path, arrowhead, and label midpoint for a flat arrow. */
+/** Compute the ribbon band, spine, arrowhead, and label midpoint for a flat arrow. */
 export function flatArrowGeometry(arrow: DiagramFlatArrow, tileSize: number): FlatArrowGeometry {
 	const z = arrow.from.z ?? 0;
 	const directed = arrow.directed !== false;
+	const cfg = { tileSize };
 
-	const path = flatArrowPath(arrow.from.x, arrow.from.y, arrow.to.x, arrow.to.y, z, { tileSize });
+	const from: GridPoint = { x: arrow.from.x, y: arrow.from.y };
+	const to: GridPoint = { x: arrow.to.x, y: arrow.to.y };
+
+	const path = ribbonPath([from, to], z, cfg);
+	const spine = polylinePath([from, to], z, cfg);
 
 	const arrowPoints = directed
-		? flatArrowHead(arrow.from.x, arrow.from.y, arrow.to.x, arrow.to.y, z, { tileSize })
+		? ribbonArrowHead(from, to, z, cfg, ARROW_LENGTH, ARROW_HALF_WIDTH)
 		: '';
 
 	const midPoint = arrow.label
-		? isoToScreen(
-				(arrow.from.x + arrow.to.x) / 2,
-				(arrow.from.y + arrow.to.y) / 2,
-				z,
-				{ tileSize }
-			)
+		? isoToScreen((arrow.from.x + arrow.to.x) / 2, (arrow.from.y + arrow.to.y) / 2, z, cfg)
 		: null;
 
-	return { path, arrowPoints, midPoint };
+	return { path, spine, arrowPoints, midPoint };
 }
 
 // ─── Floor tile ──────────────────────────────────────────────────────────────

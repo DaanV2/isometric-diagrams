@@ -113,169 +113,159 @@ export function boxPaths(
 	return { top, left, right };
 }
 
-/**
- * How far (as a fraction of tileSize) an edge's endpoint is pulled back along
- * its arriving leg. Because edges paint *below* the node cubes, a connector
- * aimed at a node's centre would bury its arrowhead inside the destination box.
- * Insetting the tip lands the arrowhead just outside the cube's near face where
- * it is actually visible.
- */
-const EDGE_END_INSET = 0.62;
-
-/**
- * Given the screen-space `base` an edge arrives from and the `rawTip` at the
- * destination node's centre, return the inset tip (pulled back out of the cube)
- * and the unit direction of travel. When the leg is degenerate (zero length)
- * the tip is left at the destination and the direction is zero.
- */
-function arrowArrival(
-	base: ScreenPoint,
-	rawTip: ScreenPoint,
-	cfg: IsoConfig
-): { tip: ScreenPoint; ux: number; uy: number } {
-	const dx = rawTip.x - base.x;
-	const dy = rawTip.y - base.y;
-	const len = Math.sqrt(dx * dx + dy * dy);
-	if (len < 1e-6) return { tip: rawTip, ux: 0, uy: 0 };
-	const ux = dx / len;
-	const uy = dy / len;
-	// Never inset past the leg's own start, so very short edges keep an endpoint.
-	const gap = Math.min(cfg.tileSize * EDGE_END_INSET, len * 0.9);
-	return { tip: { x: rawTip.x - ux * gap, y: rawTip.y - uy * gap }, ux, uy };
+/** A point in grid (ground-plane) coordinates. */
+export interface GridPoint {
+	x: number;
+	y: number;
 }
 
 /**
- * Compute an SVG path from a source grid position to a target grid position
- * using a two-segment L-shaped route in isometric space, with a rounded elbow
- * at the corner. The endpoint is inset out of the destination cube (see
- * {@link arrowArrival}) so a directed edge's arrowhead reads clearly.
- *
- * When a leg is too short to round (or degenerate), the corner falls back to a
- * sharp `M…L…L` elbow.
+ * Default half-width of a connector ribbon, in **grid units**. The band is laid
+ * out and offset in grid space (the ground plane) so it foreshortens correctly
+ * under the isometric projection — it reads as a strip of tape stuck to the
+ * floor rather than a floating line.
  */
-export function edgePath(
-	fromX: number,
-	fromY: number,
-	fromZ: number,
-	toX: number,
-	toY: number,
-	toZ: number,
+export const RIBBON_HALF_WIDTH = 0.12;
+
+/** Drop consecutive duplicate points so degenerate legs don't break offsetting. */
+function dedupe(pts: GridPoint[]): GridPoint[] {
+	const out: GridPoint[] = [];
+	for (const p of pts) {
+		const last = out[out.length - 1];
+		if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 1e-9) out.push({ x: p.x, y: p.y });
+	}
+	return out;
+}
+
+/** Unit direction (in grid space) from `a` to `b`. */
+function unit(a: GridPoint, b: GridPoint): GridPoint {
+	const dx = b.x - a.x;
+	const dy = b.y - a.y;
+	const l = Math.hypot(dx, dy) || 1;
+	return { x: dx / l, y: dy / l };
+}
+
+/**
+ * Build a filled SVG path for a flat "ribbon" lying on the ground plane (at
+ * height `z`), following a polyline given in grid coordinates. The band keeps a
+ * constant width of `2 * halfWidth` **grid units**; because the offset is taken
+ * in grid (ground) space and only then projected, the ribbon foreshortens like
+ * a real strip on the floor. Mitred joins keep the corners crisp. Returns a
+ * closed `M … L … Z` outline suitable for a filled <path>.
+ */
+export function ribbonPath(
+	pts: GridPoint[],
+	z: number,
 	cfg: IsoConfig,
-	radius = cfg.tileSize * 0.4
+	halfWidth = RIBBON_HALF_WIDTH
 ): string {
-	const from = isoToScreen(fromX, fromY, fromZ + 0.5, cfg);
-	const corner = isoToScreen(toX, fromY, (fromZ + toZ) / 2 + 0.5, cfg);
-	// Inset the endpoint along the same arriving leg the arrowhead uses, so the
-	// line meets the arrowhead exactly.
-	const base = isoToScreen(toX, fromY, toZ + 0.5, cfg);
-	const rawTo = isoToScreen(toX, toY, toZ + 0.5, cfg);
-	const { tip: to } = arrowArrival(base, rawTo, cfg);
+	const p = dedupe(pts);
+	if (p.length < 2) return '';
 
-	const v1x = corner.x - from.x;
-	const v1y = corner.y - from.y;
-	const v2x = to.x - corner.x;
-	const v2y = to.y - corner.y;
-	const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
-	const len2 = Math.sqrt(v2x * v2x + v2y * v2y);
+	const left: GridPoint[] = [];
+	const right: GridPoint[] = [];
+	for (let i = 0; i < p.length; i++) {
+		const dPrev = i > 0 ? unit(p[i - 1], p[i]) : null;
+		const dNext = i < p.length - 1 ? unit(p[i], p[i + 1]) : null;
+		// Left normal of a direction (dx,dy) is (-dy,dx).
+		const nPrev = dPrev ? { x: -dPrev.y, y: dPrev.x } : null;
+		const nNext = dNext ? { x: -dNext.y, y: dNext.x } : null;
 
-	// Cap the fillet so it never eats more than half of either leg.
-	const r = Math.min(radius, len1 / 2, len2 / 2);
-	if (!(r > 0.5) || len1 === 0 || len2 === 0) {
-		return `M ${from.x},${from.y} L ${corner.x},${corner.y} L ${to.x},${to.y}`;
+		let nx: number;
+		let ny: number;
+		let scale = 1;
+		if (nPrev && nNext) {
+			// Miter join: average the two segment normals and lengthen so the band
+			// keeps its width through the corner.
+			let mx = nPrev.x + nNext.x;
+			let my = nPrev.y + nNext.y;
+			const ml = Math.hypot(mx, my) || 1;
+			mx /= ml;
+			my /= ml;
+			const denom = mx * nNext.x + my * nNext.y || 1;
+			scale = Math.min(1 / denom, 4); // cap so sharp turns don't spike
+			nx = mx;
+			ny = my;
+		} else {
+			const n = (nPrev ?? nNext)!;
+			nx = n.x;
+			ny = n.y;
+		}
+		const off = halfWidth * scale;
+		left.push({ x: p[i].x + nx * off, y: p[i].y + ny * off });
+		right.push({ x: p[i].x - nx * off, y: p[i].y - ny * off });
 	}
 
-	const p1x = corner.x - (v1x / len1) * r;
-	const p1y = corner.y - (v1y / len1) * r;
-	const p2x = corner.x + (v2x / len2) * r;
-	const p2y = corner.y + (v2y / len2) * r;
-	return `M ${from.x},${from.y} L ${p1x},${p1y} Q ${corner.x},${corner.y} ${p2x},${p2y} L ${to.x},${to.y}`;
+	const outline = [...left, ...right.reverse()].map((g) => isoToScreen(g.x, g.y, z, cfg));
+	return 'M ' + outline.map((s) => `${s.x},${s.y}`).join(' L ') + ' Z';
 }
 
 /**
- * Build an SVG arrowhead polygon for a barbed chevron, pointing from `tip`
- * along the unit direction (`ux`, `uy`). The shape has a tip, two swept-back
- * barbs and a concave notch at the rear so it reads as a crisp arrow rather
- * than a flat triangle. `size` is the length from tip to barb, `width` the
- * half-spread of the barbs. Returns a <polygon> `points` string.
+ * Project a grid-space polyline to an `M … L …` SVG path on the ground plane.
+ * Used to paint the thin gloss "spine" running down the centre of a ribbon.
  */
-function arrowPolygon(
-	tip: ScreenPoint,
-	ux: number,
-	uy: number,
-	size: number,
-	width: number
-): string {
-	const px = -uy; // perpendicular unit
-	const py = ux;
-	const notch = size * 0.42; // how deep the rear concavity cuts in
-	return [
-		`${tip.x},${tip.y}`,
-		`${tip.x - ux * size - px * width},${tip.y - uy * size - py * width}`,
-		`${tip.x - ux * notch},${tip.y - uy * notch}`,
-		`${tip.x - ux * size + px * width},${tip.y - uy * size + py * width}`
-	].join(' ');
+export function polylinePath(pts: GridPoint[], z: number, cfg: IsoConfig): string {
+	const p = dedupe(pts);
+	if (p.length < 2) return '';
+	const s = p.map((g) => isoToScreen(g.x, g.y, z, cfg));
+	return 'M ' + s.map((q) => `${q.x},${q.y}`).join(' L ');
 }
 
 /**
- * Compute an SVG arrowhead polygon at the endpoint of an edge. The tip is inset
- * out of the destination cube (matching {@link edgePath}) and the arrowhead is
- * sized relative to `tileSize` so it stays proportional at any scale.
- * Returns a `points` string suitable for a <polygon> element.
+ * Build a flat, ground-plane arrowhead polygon pointing from `from` toward `to`
+ * (both grid coordinates) at height `z`. The barbed chevron — tip, two
+ * swept-back barbs and a rear notch — is shaped in grid space and projected, so
+ * it lies on the floor in line with its ribbon. `length` and `halfWidth` are in
+ * grid units. Returns a <polygon> `points` string.
  */
-export function arrowHead(
-	toX: number,
-	toY: number,
-	toZ: number,
-	fromX: number,
-	fromY: number,
-	cfg: IsoConfig
-): string {
-	const base = isoToScreen(toX, fromY, toZ + 0.5, cfg);
-	const rawTip = isoToScreen(toX, toY, toZ + 0.5, cfg);
-	const { tip, ux, uy } = arrowArrival(base, rawTip, cfg);
-	return arrowPolygon(tip, ux, uy, cfg.tileSize * 0.26, cfg.tileSize * 0.13);
-}
-
-/**
- * Compute the SVG path for a straight flat arrow from (fromX, fromY) to (toX, toY)
- * lying on the ground at the given z level.
- */
-export function flatArrowPath(
-	fromX: number,
-	fromY: number,
-	toX: number,
-	toY: number,
+export function ribbonArrowHead(
+	from: GridPoint,
+	to: GridPoint,
 	z: number,
-	cfg: IsoConfig
+	cfg: IsoConfig,
+	length = 0.5,
+	halfWidth = 0.26
 ): string {
-	const from = isoToScreen(fromX, fromY, z, cfg);
-	const to = isoToScreen(toX, toY, z, cfg);
-	return `M ${from.x},${from.y} L ${to.x},${to.y}`;
+	const u = unit(from, to);
+	const px = -u.y; // perpendicular unit (grid space)
+	const py = u.x;
+	const baseCx = to.x - u.x * length;
+	const baseCy = to.y - u.y * length;
+	const notch = length * 0.55; // depth of the rear concavity
+	const verts: GridPoint[] = [
+		to,
+		{ x: baseCx + px * halfWidth, y: baseCy + py * halfWidth },
+		{ x: to.x - u.x * notch, y: to.y - u.y * notch },
+		{ x: baseCx - px * halfWidth, y: baseCy - py * halfWidth }
+	];
+	return verts.map((g) => isoToScreen(g.x, g.y, z, cfg)).map((s) => `${s.x},${s.y}`).join(' ');
 }
 
 /**
- * Compute an SVG arrowhead polygon for a flat arrow pointing from (fromX, fromY)
- * to (toX, toY) on the ground at the given z level.
- * Returns a `points` string for a <polygon> element.
+ * Pull the first and last vertices of a route inward along their own end
+ * segments by the given grid-unit insets, returning a new route. Used so a
+ * connector ribbon starts/stops clear of the cube footprints it joins (an
+ * arrowhead aimed at a node centre would otherwise be buried under the box).
  */
-export function flatArrowHead(
-	fromX: number,
-	fromY: number,
-	toX: number,
-	toY: number,
-	z: number,
-	cfg: IsoConfig
-): string {
-	const tip = isoToScreen(toX, toY, z, cfg);
-	const base = isoToScreen(fromX, fromY, z, cfg);
-	const dx = tip.x - base.x;
-	const dy = tip.y - base.y;
-	const len = Math.sqrt(dx * dx + dy * dy) || 1;
-	const ux = dx / len;
-	const uy = dy / len;
-	// Flat arrows sit on the ground (never buried under a cube), so the tip stays
-	// at the destination. Sized a touch larger than edge arrowheads.
-	return arrowPolygon(tip, ux, uy, cfg.tileSize * 0.3, cfg.tileSize * 0.15);
+export function insetRouteEnds(
+	route: GridPoint[],
+	startInset: number,
+	endInset: number
+): GridPoint[] {
+	const r = dedupe(route).map((p) => ({ ...p }));
+	if (r.length < 2) return r;
+	const pull = (a: GridPoint, b: GridPoint, inset: number) => {
+		const dx = b.x - a.x;
+		const dy = b.y - a.y;
+		const l = Math.hypot(dx, dy);
+		if (l < 1e-9) return;
+		const t = Math.min(inset, l * 0.9) / l;
+		a.x += dx * t;
+		a.y += dy * t;
+	};
+	pull(r[0], r[1], startInset);
+	pull(r[r.length - 1], r[r.length - 2], endInset);
+	return r;
 }
 
 /**
