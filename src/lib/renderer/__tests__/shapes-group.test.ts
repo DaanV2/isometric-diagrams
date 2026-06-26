@@ -24,12 +24,13 @@ describe('groupBoundary', () => {
 		}
 	});
 
-	it('labelX/labelY come from the top-corner screen position', () => {
+	it('labelX/labelY come from the ground-plane top corner', () => {
 		const result = groupBoundary([makeNode('a', 2, 3)], TILE)!;
-		// gpad=1: minGX=2-1=1, minGY=3-1=2, zTop=0+NODE_HEIGHT=1
-		const top = isoToScreen(1, 2, 1, { tileSize: TILE });
-		expect(result.labelX).toBeCloseTo(top.x, 5);
-		expect(result.labelY).toBeCloseTo(top.y + 14, 5);
+		// gpad=1: minGX=2-1=1, minGY=3-1=2; the zone sits on the ground (z=0)
+		// and the top corner is pushed up by half a tile (TILE/2).
+		const topCentre = isoToScreen(1, 2, 0, { tileSize: TILE });
+		expect(result.labelX).toBeCloseTo(topCentre.x, 5);
+		expect(result.labelY).toBeCloseTo(topCentre.y - TILE / 2 - 6, 5);
 	});
 
 	it('larger group of nodes expands the boundary', () => {
@@ -49,9 +50,10 @@ describe('groupBoundary', () => {
 		expect(maxAbs(padded)).toBeGreaterThan(maxAbs(tight));
 	});
 
-	it('higher z nodes raise the boundary labelY (smaller screen y)', () => {
+	it('is a ground-plane zone independent of node z-height', () => {
 		const ground = groupBoundary([makeNode('a', 0, 0, 0)], TILE)!;
 		const raised = groupBoundary([makeNode('a', 0, 0, 3)], TILE)!;
-		expect(raised.labelY).toBeLessThan(ground.labelY);
+		expect(raised.points).toBe(ground.points);
+		expect(raised.labelY).toBeCloseTo(ground.labelY, 5);
 	});
 });

@@ -108,23 +108,36 @@ node-info) that do **not** pan/zoom.
 
 ## Node rendering
 
-Every node renders as a 1-tile-tall isometric box (`NODE_HEIGHT = 1`).
+Every node renders as a 1-tile-tall **solid** isometric box (`NODE_HEIGHT = 1`).
 The box has three faces: `top` (diamond), `left` (parallelogram), `right`
 (parallelogram). Face colours come from `getNodeColours(node.type)` in
-`theme.ts`. Nodes with an icon render with semi-transparent faces and a centred
-emoji.
+`theme.ts`, which derives all three faces from a single base hue so every cube
+is lit consistently (top brightest → right mid-tone → left in shadow). Faces get
+a vertical depth gradient (`#iso-face-shade`) and the top a glossy sheen
+(`#iso-top-sheen`); a soft contact shadow (`#iso-soft-shadow`, defined in the
+diagram `<defs>`) grounds each cube. The type icon rests on the top face on a
+subtle plate.
+
+`IsometricNode` takes a `part` prop: `'body'` (cube + icon), `'label'` (text
+only), or `'all'`. The diagram renders all node **bodies** first, then a second
+**label** pass (`part="label"`, plus group labels) so labels always paint on top
+of every cube and never hide behind a neighbour. Only `part !== 'label'` groups
+carry the `.iso-node` class / interaction handlers.
 
 Painter's algorithm: nodes are sorted by `x + y` before rendering so closer
 nodes paint over farther ones.
 
 ## Group boundaries
 
-Groups are rendered as isometric parallelograms (SVG `<polygon>`), **not**
-axis-aligned rectangles. The four corners are projected from grid space at
-cube-top height (`maxZ + NODE_HEIGHT`) so the boundary follows the isometric
-grid lines and clears node box tops. The bottom corner is extended down by
-`tileSize * 0.5` to cover cube side faces. Computed via `groupBoundary()` in
-`shapes.ts`.
+Groups render as a flat isometric "zone rug" on the **ground plane** (SVG
+`<polygon>`), **not** axis-aligned rectangles. All four corners are projected at
+`z = 0` so opposite edges are parallel and lie on the isometric grid lines — a
+true parallelogram the member cubes stand on, rather than a skewed quad (an
+earlier version mixed cube-top and ground corners, which made the edges look
+diagonal). Each corner is pushed out half a tile so the zone encloses the corner
+tiles' footprints. The polygon is painted behind everything; the group label is
+drawn in the label overlay pass so it stays legible. Computed via
+`groupBoundary()` in `shapes.ts`.
 
 ## Edge routing
 

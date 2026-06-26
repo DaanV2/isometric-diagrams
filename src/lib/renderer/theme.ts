@@ -2,6 +2,8 @@ import type { NodeType, EdgeType } from '../types/diagram.js';
 
 export interface Theme {
 	background: string;
+	/** Second colour for the background radial gradient (centre → edge). */
+	backgroundAccent: string;
 	gridLine: string;
 	text: string;
 	textSecondary: string;
@@ -9,28 +11,34 @@ export interface Theme {
 	edgeArrow: string;
 	groupFill: string;
 	groupStroke: string;
+	/** Colour of the soft contact shadow cast on the ground under each node. */
+	shadow: string;
 }
 
 export const lightTheme: Theme = {
-	background: '#f8f9fa',
-	gridLine: '#dee2e6',
-	text: '#212529',
-	textSecondary: '#6c757d',
-	edge: '#495057',
-	edgeArrow: '#343a40',
-	groupFill: 'rgba(13,110,253,0.06)',
-	groupStroke: 'rgba(13,110,253,0.3)'
+	background: '#eef1f6',
+	backgroundAccent: '#fbfcfe',
+	gridLine: '#c9d2e0',
+	text: '#1b2430',
+	textSecondary: '#5b6675',
+	edge: '#5b6675',
+	edgeArrow: '#3a424f',
+	groupFill: 'rgba(37,99,235,0.05)',
+	groupStroke: 'rgba(37,99,235,0.28)',
+	shadow: 'rgba(40,52,74,0.18)'
 };
 
 export const darkTheme: Theme = {
-	background: '#0d1117',
-	gridLine: '#21262d',
-	text: '#e6edf3',
-	textSecondary: '#8b949e',
-	edge: '#8b949e',
-	edgeArrow: '#c9d1d9',
-	groupFill: 'rgba(56,139,253,0.08)',
-	groupStroke: 'rgba(56,139,253,0.4)'
+	background: '#0a0e16',
+	backgroundAccent: '#141b27',
+	gridLine: '#222c3c',
+	text: '#eef2f8',
+	textSecondary: '#8b97a8',
+	edge: '#9aa6b8',
+	edgeArrow: '#cdd6e3',
+	groupFill: 'rgba(96,165,250,0.06)',
+	groupStroke: 'rgba(96,165,250,0.35)',
+	shadow: 'rgba(0,0,0,0.45)'
 };
 
 /** Colours for node faces based on node type. */
@@ -42,43 +50,85 @@ export interface NodeColours {
 	icon: string;
 }
 
-const NODE_COLOURS: Record<NodeType, NodeColours> = {
-	server: { top: '#2d6a4f', left: '#1b4332', right: '#40916c', stroke: '#74c69d', icon: '🖥️' },
-	service: { top: '#1d3557', left: '#0d1b2a', right: '#457b9d', stroke: '#a8dadc', icon: '⚙️' },
-	database: { top: '#4a1942', left: '#2d1b3d', right: '#7b2d8b', stroke: '#c77dff', icon: '🗄️' },
-	loadbalancer: {
-		top: '#7b3f00',
-		left: '#4a2500',
-		right: '#a05c10',
-		stroke: '#f4a261',
-		icon: '⚖️'
-	},
-	gateway: { top: '#003566', left: '#001d3d', right: '#0077b6', stroke: '#90e0ef', icon: '🌐' },
-	queue: { top: '#5c3317', left: '#3b1f0a', right: '#8b4513', stroke: '#dda15e', icon: '📦' },
-	storage: { top: '#3a3a3a', left: '#1c1c1c', right: '#5a5a5a', stroke: '#aaaaaa', icon: '💾' },
-	warehouse: { top: '#4a5568', left: '#2d3748', right: '#718096', stroke: '#e2e8f0', icon: '🏭' },
-	dock: { top: '#1a535c', left: '#0d2b30', right: '#2a9d8f', stroke: '#80ced6', icon: '⚓' },
-	truck: { top: '#cc3b16', left: '#8b2510', right: '#e76f51', stroke: '#f4a261', icon: '🚚' },
-	box: { top: '#936639', left: '#6b4226', right: '#c28855', stroke: '#dbb88a', icon: '📫' },
-	person: { top: '#2b6cb0', left: '#1a4a80', right: '#4299e1', stroke: '#90cdf4', icon: '👤' },
-	cloud: { top: '#718096', left: '#4a5568', right: '#a0aec0', stroke: '#e2e8f0', icon: '☁️' },
-	router: { top: '#276749', left: '#1c4532', right: '#38a169', stroke: '#9ae6b4', icon: '📡' },
-	generic: { top: '#4a5568', left: '#2d3748', right: '#718096', stroke: '#e2e8f0', icon: '◼' }
+// ─── Colour shading helpers ───────────────────────────────────────────────────
+// Faces are derived from one base hue per type so every cube is lit consistently:
+// the top face catches the most light, the right face sits at the base tone, and
+// the left face falls into shadow. This is what makes the boxes read as solid 3-D.
+
+function hexToRgb(hex: string): [number, number, number] {
+	const h = hex.replace('#', '');
+	return [
+		parseInt(h.slice(0, 2), 16),
+		parseInt(h.slice(2, 4), 16),
+		parseInt(h.slice(4, 6), 16)
+	];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+	const c = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+	return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/** Mix a colour toward white (amount > 0) or black (amount < 0); amount in [-1, 1]. */
+function shade(hex: string, amount: number): string {
+	const [r, g, b] = hexToRgb(hex);
+	const target = amount >= 0 ? 255 : 0;
+	const t = Math.abs(amount);
+	return rgbToHex(r + (target - r) * t, g + (target - g) * t, b + (target - b) * t);
+}
+
+/** Build a consistently-lit face set from a single base colour. */
+function faces(base: string, icon: string): NodeColours {
+	return {
+		top: shade(base, 0.26), // brightest — light from above
+		right: base, // mid tone — the lit side
+		left: shade(base, -0.32), // darkest — the shadowed side
+		stroke: shade(base, 0.5), // crisp lighter edge highlight
+		icon
+	};
+}
+
+/** Base hue per node type — a cohesive, modern palette. */
+const NODE_BASE: Record<NodeType, { base: string; icon: string }> = {
+	server: { base: '#22c55e', icon: '🖥️' },
+	service: { base: '#6366f1', icon: '⚙️' },
+	database: { base: '#a855f7', icon: '🗄️' },
+	loadbalancer: { base: '#f59e0b', icon: '⚖️' },
+	gateway: { base: '#06b6d4', icon: '🌐' },
+	queue: { base: '#f97316', icon: '📦' },
+	storage: { base: '#64748b', icon: '💾' },
+	warehouse: { base: '#8b7d6b', icon: '🏭' },
+	dock: { base: '#14b8a6', icon: '⚓' },
+	truck: { base: '#ef4444', icon: '🚚' },
+	box: { base: '#d9a441', icon: '📫' },
+	person: { base: '#3b82f6', icon: '👤' },
+	cloud: { base: '#94a3b8', icon: '☁️' },
+	router: { base: '#10b981', icon: '📡' },
+	generic: { base: '#7c8aa0', icon: '◼' }
 };
+
+const NODE_COLOURS: Record<NodeType, NodeColours> = Object.fromEntries(
+	Object.entries(NODE_BASE).map(([type, { base, icon }]) => [type, faces(base, icon)])
+) as Record<NodeType, NodeColours>;
 
 export function getNodeColours(type: NodeType | undefined): NodeColours {
 	return NODE_COLOURS[type ?? 'generic'] ?? NODE_COLOURS['generic'];
+}
+
+/** Base (mid-tone) colour for a node type — handy for glows, badges, accents. */
+export function getNodeBaseColour(type: NodeType | undefined): string {
+	return NODE_BASE[type ?? 'generic']?.base ?? NODE_BASE['generic'].base;
 }
 
 /** All valid node type names (runtime source of truth, mirrors the NodeType union). */
 export const NODE_TYPE_NAMES = Object.keys(NODE_COLOURS) as NodeType[];
 
 const EDGE_COLOURS: Record<EdgeType, string> = {
-	network: '#4299e1',
-	flow: '#48bb78',
-	dependency: '#ed8936',
-	data: '#9f7aea',
-	generic: '#718096'
+	network: '#60a5fa',
+	flow: '#34d399',
+	dependency: '#fbbf24',
+	data: '#c084fc',
+	generic: '#94a3b8'
 };
 
 export function getEdgeColour(type: EdgeType | undefined): string {

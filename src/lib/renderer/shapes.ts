@@ -34,9 +34,11 @@ export interface NodeBox {
 	left: string;
 	/** SVG path for the right face. */
 	right: string;
+	/** SVG path for the soft contact shadow on the ground under the box. */
+	shadow: string;
 	/** Screen-space anchor for the label below the box. */
 	labelPos: ScreenPoint;
-	/** Screen-space anchor for the icon centred in the box. */
+	/** Screen-space anchor for the icon, centred on the top face. */
 	iconPos: ScreenPoint;
 }
 
@@ -53,16 +55,28 @@ export function nodeBox(node: DiagramNode, tileSize: number): NodeBox {
 	const labelPos = isoToScreen(
 		node.position.x,
 		node.position.y,
-		gz + NODE_HEIGHT + 0.3,
+		gz + NODE_HEIGHT + 0.95,
 		{ tileSize }
 	);
+	// Icon sits centred on the top (diamond) face.
 	const iconPos = isoToScreen(
 		node.position.x,
 		node.position.y,
-		gz + NODE_HEIGHT * 0.52,
+		gz + NODE_HEIGHT,
 		{ tileSize }
 	);
-	return { top, left, right, labelPos, iconPos };
+	// Contact shadow: an enlarged ground diamond, nudged toward the shadowed
+	// side, so a soft pool of darkness peeks out from under the cube's base.
+	const base = isoToScreen(node.position.x, node.position.y, gz, { tileSize });
+	const sw = tileSize * 1.18; // shadow half-width
+	const sh = (tileSize / 2) * 1.18;
+	const ox = -tileSize * 0.08;
+	const oy = tileSize * 0.1;
+	const cx = base.x + ox;
+	const cy = base.y + oy;
+	const shadow = `M ${cx},${cy - sh} L ${cx + sw},${cy} L ${cx},${cy + sh} L ${cx - sw},${cy} Z`;
+
+	return { top, left, right, shadow, labelPos, iconPos };
 }
 
 // ─── Edge depth sorting ──────────────────────────────────────────────────────
@@ -207,10 +221,11 @@ export interface GroupBoundary {
 /**
  * Compute the isometric parallelogram that surrounds a group of nodes.
  *
- * The shape follows the two isometric grid axes so its edges lie on grid
- * lines. Top, right, and left corners are projected at cube-top height so
- * the boundary clears all node boxes. The bottom corner is at ground level
- * with a small downward extension to cover cube side faces.
+ * The shape is a flat zone on the ground plane: all four corners sit at z = 0
+ * so opposite edges are parallel and lie on the isometric grid lines — a clean
+ * iso "rug" the member cubes stand on, rather than a skewed quad. Each corner
+ * is pushed out by half a tile so the zone fully encloses the corner tiles'
+ * footprints.
  *
  * @param memberNodes - All nodes belonging to the group.
  * @param tileSize    - Diagram tile size in pixels.
@@ -225,8 +240,6 @@ export function groupBoundary(
 
 	const gxs = memberNodes.map((n) => n.position.x);
 	const gys = memberNodes.map((n) => n.position.y);
-	const maxZ = Math.max(...memberNodes.map((n) => n.position.z ?? 0));
-	const zTop = maxZ + NODE_HEIGHT;
 
 	const minGX = Math.min(...gxs) - gpad;
 	const maxGX = Math.max(...gxs) + gpad;
@@ -234,19 +247,23 @@ export function groupBoundary(
 	const maxGY = Math.max(...gys) + gpad;
 
 	const cfg = { tileSize };
-	const top = isoToScreen(minGX, minGY, zTop, cfg);
-	const right = isoToScreen(maxGX, minGY, zTop, cfg);
-	const bottom = isoToScreen(maxGX, maxGY, 0, cfg);
-	const left = isoToScreen(minGX, maxGY, zTop, cfg);
+	const hw = tileSize; // half tile width
+	const hh = tileSize / 2; // half tile height
 
-	const points = [
-		`${top.x},${top.y}`,
-		`${right.x},${right.y}`,
-		`${bottom.x},${bottom.y + tileSize * 0.5}`,
-		`${left.x},${left.y}`
-	].join(' ');
+	const topC = isoToScreen(minGX, minGY, 0, cfg);
+	const rightC = isoToScreen(maxGX, minGY, 0, cfg);
+	const bottomC = isoToScreen(maxGX, maxGY, 0, cfg);
+	const leftC = isoToScreen(minGX, maxGY, 0, cfg);
 
-	return { points, labelX: top.x, labelY: top.y + 14 };
+	// Push each corner out by half a tile along the diamond's axes.
+	const top = { x: topC.x, y: topC.y - hh };
+	const right = { x: rightC.x + hw, y: rightC.y };
+	const bottom = { x: bottomC.x, y: bottomC.y + hh };
+	const left = { x: leftC.x - hw, y: leftC.y };
+
+	const points = [top, right, bottom, left].map((p) => `${p.x},${p.y}`).join(' ');
+
+	return { points, labelX: top.x, labelY: top.y - 6 };
 }
 
 // ─── Grid lines ──────────────────────────────────────────────────────────────
