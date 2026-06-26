@@ -39,7 +39,9 @@
 				class="edge-path edge-path--dashed"
 				fill="none"
 				stroke={colour}
-				stroke-width="1.5"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
 			/>
 		{:else}
 			<path
@@ -48,7 +50,9 @@
 				class="edge-path"
 				fill="none"
 				stroke={colour}
-				stroke-width="1.5"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
 			/>
 		{/if}
 		{#if directed && geo.arrowPoints}
@@ -71,7 +75,7 @@
 
 <style>
 	.edge-path {
-		opacity: 0.85;
+		opacity: 0.9;
 		animation: draw-line 0.8s ease-out forwards;
 	}
 

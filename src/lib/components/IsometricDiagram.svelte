@@ -330,7 +330,7 @@
 	bind:clientHeight={vpH}
 	style:width={width ? `${width}px` : '100%'}
 	style:height={height ? `${height}px` : '100%'}
-	style:background={themeVars.background}
+	style:background="radial-gradient(125% 115% at 50% 32%, {themeVars.backgroundAccent} 0%, {themeVars.background} 68%)"
 	onwheel={onWheel}
 	onpointerdown={onPointerDown}
 	onpointermove={onPointerMove}
@@ -351,13 +351,27 @@
 			--background: {themeVars.background};
 			--text: {themeVars.text};
 			--text-secondary: {themeVars.textSecondary};
+			--shadow: {themeVars.shadow};
 		"
 	>
+		<defs>
+			<!-- Soft blur for node contact shadows -->
+			<filter id="iso-soft-shadow" x="-50%" y="-50%" width="200%" height="200%">
+				<feGaussianBlur stdDeviation={tileSize * 0.09} />
+			</filter>
+			<!-- Vertical depth falloff overlaid on cube side faces -->
+			<linearGradient id="iso-face-shade" x1="0" y1="0" x2="0" y2="1">
+				<stop offset="0" stop-color="#ffffff" stop-opacity="0.06" />
+				<stop offset="0.45" stop-color="#000000" stop-opacity="0" />
+				<stop offset="1" stop-color="#000000" stop-opacity="0.28" />
+			</linearGradient>
+		</defs>
+
 		<g class="content">
 			<!-- Grid lines -->
 			{#if showGrid}
 				{#each gridLines as d, i (i)}
-					<path {d} fill="none" stroke={themeVars.gridLine} stroke-width="0.5" opacity="0.5" />
+					<path {d} fill="none" stroke={themeVars.gridLine} stroke-width="1" opacity="0.35" />
 				{/each}
 			{/if}
 
@@ -366,10 +380,13 @@
 				{#if grp}
 					<polygon
 						points={grp.points}
-						fill={grp.color ? grp.color + '18' : themeVars.groupFill}
+						fill={grp.color ? grp.color + '12' : themeVars.groupFill}
 						stroke={grp.color ?? themeVars.groupStroke}
-						stroke-width="1.5"
-						stroke-dasharray="6,3"
+						stroke-opacity="0.55"
+						stroke-width="1.25"
+						stroke-linejoin="round"
+						stroke-dasharray="2,6"
+						stroke-linecap="round"
 					/>
 					<text
 						x={grp.labelX}
@@ -574,9 +591,14 @@
 	}
 
 	.group-label {
-		font-size: 10px;
+		font-size: 10.5px;
 		font-family: system-ui, sans-serif;
-		font-weight: 600;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		paint-order: stroke fill;
+		stroke: var(--background, #0a0e16);
+		stroke-width: 3.5px;
+		stroke-linejoin: round;
 	}
 	.node-info {
 		position: absolute;

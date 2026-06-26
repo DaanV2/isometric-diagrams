@@ -34,9 +34,11 @@ export interface NodeBox {
 	left: string;
 	/** SVG path for the right face. */
 	right: string;
+	/** SVG path for the soft contact shadow on the ground under the box. */
+	shadow: string;
 	/** Screen-space anchor for the label below the box. */
 	labelPos: ScreenPoint;
-	/** Screen-space anchor for the icon centred in the box. */
+	/** Screen-space anchor for the icon, centred on the top face. */
 	iconPos: ScreenPoint;
 }
 
@@ -53,16 +55,28 @@ export function nodeBox(node: DiagramNode, tileSize: number): NodeBox {
 	const labelPos = isoToScreen(
 		node.position.x,
 		node.position.y,
-		gz + NODE_HEIGHT + 0.3,
+		gz + NODE_HEIGHT + 0.95,
 		{ tileSize }
 	);
+	// Icon sits centred on the top (diamond) face.
 	const iconPos = isoToScreen(
 		node.position.x,
 		node.position.y,
-		gz + NODE_HEIGHT * 0.52,
+		gz + NODE_HEIGHT,
 		{ tileSize }
 	);
-	return { top, left, right, labelPos, iconPos };
+	// Contact shadow: an enlarged ground diamond, nudged toward the shadowed
+	// side, so a soft pool of darkness peeks out from under the cube's base.
+	const base = isoToScreen(node.position.x, node.position.y, gz, { tileSize });
+	const sw = tileSize * 1.18; // shadow half-width
+	const sh = (tileSize / 2) * 1.18;
+	const ox = -tileSize * 0.08;
+	const oy = tileSize * 0.1;
+	const cx = base.x + ox;
+	const cy = base.y + oy;
+	const shadow = `M ${cx},${cy - sh} L ${cx + sw},${cy} L ${cx},${cy + sh} L ${cx - sw},${cy} Z`;
+
+	return { top, left, right, shadow, labelPos, iconPos };
 }
 
 // ─── Edge depth sorting ──────────────────────────────────────────────────────
