@@ -19,6 +19,7 @@
 
 <g
 	class="iso-flat-arrow"
+	filter="url(#iso-edge-glow)"
 	style="transform: translate({offsetX}px, {offsetY}px)"
 >
 	<path
@@ -28,10 +29,18 @@
 		fill="none"
 		stroke={colour}
 		stroke-width="2"
+		stroke-linecap="round"
 		opacity={arrow.style?.opacity ?? 0.9}
 	/>
 	{#if directed && geo.arrowPoints}
-		<polygon points={geo.arrowPoints} fill={colour} opacity={arrow.style?.opacity ?? 0.9} />
+		<polygon
+			points={geo.arrowPoints}
+			fill={colour}
+			stroke={colour}
+			stroke-width="1"
+			stroke-linejoin="round"
+			opacity={arrow.style?.opacity ?? 0.9}
+		/>
 	{/if}
 	{#if geo.midPoint}
 		<text

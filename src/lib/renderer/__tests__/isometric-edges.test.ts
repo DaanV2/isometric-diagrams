@@ -25,38 +25,56 @@ describe('edgePath', () => {
 		const raised = edgePath(0, 0, 2, 2, 2, 2, cfg);
 		expect(flat).not.toBe(raised);
 	});
+
+	it('rounds the elbow with a quadratic curve for a normal two-leg edge', () => {
+		const path = edgePath(0, 0, 0, 2, 2, 0, cfg);
+		expect(path).toContain(' Q ');
+	});
+
+	it('insets the endpoint short of the destination centre', () => {
+		const path = edgePath(0, 0, 0, 2, 2, 0, cfg);
+		const rawTo = isoToScreen(2, 2, 0.5, cfg);
+		// The connector stops before the node centre so the arrowhead clears the cube.
+		expect(path.endsWith(`${rawTo.x},${rawTo.y}`)).toBe(false);
+	});
+
+	it('falls back to a sharp elbow when a leg is degenerate', () => {
+		const path = edgePath(0, 0, 0, 0, 0, 0, cfg);
+		expect(path).not.toContain(' Q ');
+		expect((path.match(/ L /g) ?? []).length).toBe(2);
+	});
 });
 
 describe('arrowHead', () => {
-	it('returns three space-separated coordinate pairs', () => {
+	it('returns four space-separated coordinate pairs (barbed chevron)', () => {
 		const points = arrowHead(1, 1, 0, 0, 0, cfg);
 		const parts = points.split(' ');
-		expect(parts.length).toBe(3);
+		expect(parts.length).toBe(4);
 		for (const p of parts) {
 			expect(p).toMatch(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/);
 		}
 	});
 
-	it('tip is at isoToScreen(toX, toY, toZ+0.5)', () => {
-		const expected = isoToScreen(1, 1, 0.5, cfg);
+	it('tip is inset out of the destination cube toward the source', () => {
+		const rawTip = isoToScreen(1, 1, 0.5, cfg);
+		const base = isoToScreen(1, 0, 0.5, cfg);
 		const [tipStr] = arrowHead(1, 1, 0, 0, 0, cfg).split(' ');
 		const [tx, ty] = tipStr.split(',').map(Number);
-		expect(tx).toBeCloseTo(expected.x, 5);
-		expect(ty).toBeCloseTo(expected.y, 5);
+		// Closer to the source than the raw node centre…
+		expect(Math.hypot(tx - base.x, ty - base.y)).toBeLessThan(
+			Math.hypot(rawTip.x - base.x, rawTip.y - base.y)
+		);
+		// …pulled back by tileSize * 0.62 from that centre.
+		expect(Math.hypot(tx - rawTip.x, ty - rawTip.y)).toBeCloseTo(cfg.tileSize * 0.62, 5);
 	});
 
-	it('produces a non-degenerate triangle when toY ≠ fromY', () => {
-		// Use toY=2 ≠ fromY=0 so tip ≠ base (base = isoToScreen(toX, fromY, ...))
-		const coords = arrowHead(2, 2, 0, 0, 0, cfg)
-			.split(' ')
-			.map((p) => p.split(',').map(Number));
-		const [tip, b1, b2] = coords;
-		expect(tip).not.toEqual(b1);
-		expect(tip).not.toEqual(b2);
-		expect(b1).not.toEqual(b2);
+	it('produces four distinct vertices when toY ≠ fromY', () => {
+		const coords = arrowHead(2, 2, 0, 0, 0, cfg).split(' ');
+		expect(coords.length).toBe(4);
+		expect(new Set(coords).size).toBe(4);
 	});
 
-	it('does not throw when direction is zero-length (uses len||1 fallback)', () => {
+	it('does not throw when direction is zero-length (uses fallback)', () => {
 		expect(() => arrowHead(0, 0, 0, 0, 0, cfg)).not.toThrow();
 	});
 });

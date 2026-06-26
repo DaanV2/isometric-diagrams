@@ -29,16 +29,16 @@ describe('flatArrowPath', () => {
 });
 
 describe('flatArrowHead', () => {
-	it('returns three space-separated coordinate pairs', () => {
+	it('returns four space-separated coordinate pairs (barbed chevron)', () => {
 		const points = flatArrowHead(0, 0, 1, 1, 0, cfg);
 		const parts = points.split(' ');
-		expect(parts.length).toBe(3);
+		expect(parts.length).toBe(4);
 		for (const p of parts) {
 			expect(p).toMatch(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/);
 		}
 	});
 
-	it('tip is at isoToScreen of to position', () => {
+	it('tip stays at isoToScreen of to position (flat arrows are never buried)', () => {
 		const expected = isoToScreen(2, 1, 0, cfg);
 		const [tipStr] = flatArrowHead(0, 0, 2, 1, 0, cfg).split(' ');
 		const [tx, ty] = tipStr.split(',').map(Number);
@@ -46,22 +46,18 @@ describe('flatArrowHead', () => {
 		expect(ty).toBeCloseTo(expected.y, 5);
 	});
 
-	it('produces a non-degenerate triangle', () => {
-		const coords = flatArrowHead(0, 0, 2, 0, 0, cfg)
-			.split(' ')
-			.map((p) => p.split(',').map(Number));
-		const [tip, b1, b2] = coords;
-		expect(tip).not.toEqual(b1);
-		expect(tip).not.toEqual(b2);
-		expect(b1).not.toEqual(b2);
+	it('produces four distinct vertices', () => {
+		const coords = flatArrowHead(0, 0, 2, 0, 0, cfg).split(' ');
+		expect(coords.length).toBe(4);
+		expect(new Set(coords).size).toBe(4);
 	});
 
-	it('is larger than edgePath arrowHead (size 10 vs size 8)', () => {
-		// flatArrowHead uses size=10, arrowHead uses size=8 — base should be farther from tip
-		const flat = flatArrowHead(0, 0, 1, 0, 0, cfg)
+	it('barbs reach farther from the tip than an edge arrowhead', () => {
+		// Flat arrowheads are sized larger (0.3 × tile) than edge ones (0.26 × tile).
+		const flat = flatArrowHead(0, 0, 1, 1, 0, cfg)
 			.split(' ')
 			.map((p) => p.split(',').map(Number));
-		const edge = arrowHead(1, 0, 0, 0, 0, cfg)
+		const edge = arrowHead(1, 1, 0, 0, 0, cfg)
 			.split(' ')
 			.map((p) => p.split(',').map(Number));
 		const dist = ([a, b]: number[], [c, d]: number[]) => Math.hypot(a - c, b - d);

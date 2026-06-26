@@ -380,6 +380,10 @@
 				<stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04" />
 				<stop offset="1" stop-color="#000000" stop-opacity="0.06" />
 			</linearGradient>
+			<!-- Soft drop shadow that lifts edges/arrows off the ground plane -->
+			<filter id="iso-edge-glow" x="-30%" y="-30%" width="160%" height="160%">
+				<feDropShadow dx="0" dy="1" stdDeviation="1.1" flood-color="#000000" flood-opacity="0.5" />
+			</filter>
 		</defs>
 
 		<g class="content">
