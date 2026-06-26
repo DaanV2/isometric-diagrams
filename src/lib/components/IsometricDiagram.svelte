@@ -365,6 +365,12 @@
 				<stop offset="0.45" stop-color="#000000" stop-opacity="0" />
 				<stop offset="1" stop-color="#000000" stop-opacity="0.28" />
 			</linearGradient>
+			<!-- Glossy sheen across the top face -->
+			<linearGradient id="iso-top-sheen" x1="0.15" y1="0" x2="0.7" y2="1">
+				<stop offset="0" stop-color="#ffffff" stop-opacity="0.32" />
+				<stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04" />
+				<stop offset="1" stop-color="#000000" stop-opacity="0.06" />
+			</linearGradient>
 		</defs>
 
 		<g class="content">
@@ -375,28 +381,19 @@
 				{/each}
 			{/if}
 
-			<!-- Group highlights -->
+			<!-- Group zones (flat on the ground, behind everything) -->
 			{#each groupPolygons as grp (grp?.id)}
 				{#if grp}
 					<polygon
 						points={grp.points}
 						fill={grp.color ? grp.color + '12' : themeVars.groupFill}
 						stroke={grp.color ?? themeVars.groupStroke}
-						stroke-opacity="0.55"
-						stroke-width="1.25"
+						stroke-opacity="0.6"
+						stroke-width="1.5"
 						stroke-linejoin="round"
-						stroke-dasharray="2,6"
+						stroke-dasharray="2,7"
 						stroke-linecap="round"
 					/>
-					<text
-						x={grp.labelX}
-						y={grp.labelY}
-						text-anchor="middle"
-						class="group-label"
-						fill={grp.color ?? themeVars.textSecondary}
-					>
-						{grp.label}
-					</text>
 				{/if}
 			{/each}
 
@@ -415,16 +412,35 @@
 				<IsometricEdge {edge} {nodeMap} {tileSize} offsetX={0} offsetY={0} />
 			{/each}
 
-			<!-- Nodes (painter's order) -->
+			<!-- Node bodies (painter's order) -->
 			{#each sortedNodes as node (node.id)}
 				<IsometricNode
 					{node}
 					{tileSize}
 					offsetX={0}
 					offsetY={0}
+					part="body"
 					selected={selectedNodeId === node.id}
 					onclick={selectNode}
 				/>
+			{/each}
+
+			<!-- Overlay pass: group + node labels, always drawn on top of every cube -->
+			{#each groupPolygons as grp (grp?.id)}
+				{#if grp}
+					<text
+						x={grp.labelX}
+						y={grp.labelY}
+						text-anchor="middle"
+						class="group-label"
+						fill={grp.color ?? themeVars.textSecondary}
+					>
+						{grp.label}
+					</text>
+				{/if}
+			{/each}
+			{#each sortedNodes as node (node.id)}
+				<IsometricNode {node} {tileSize} offsetX={0} offsetY={0} part="label" />
 			{/each}
 		</g>
 	</svg>

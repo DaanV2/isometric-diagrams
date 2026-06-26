@@ -9,10 +9,12 @@
 		offsetX: number;
 		offsetY: number;
 		selected?: boolean;
+		/** Which part to render. 'body' = cube + icon, 'label' = text only, 'all' = both. */
+		part?: 'body' | 'label' | 'all';
 		onclick?: (id: string) => void;
 	}
 
-	let { node, tileSize, offsetX, offsetY, selected = false, onclick }: Props = $props();
+	let { node, tileSize, offsetX, offsetY, selected = false, part = 'all', onclick }: Props = $props();
 
 	const colours = $derived(getNodeColours(node.type));
 	const hasIcon = $derived(Boolean(colours.icon?.trim()));
@@ -34,77 +36,78 @@
 	}
 </script>
 
-<g
-	class="iso-node"
-	class:selected
-	data-node-id={node.id}
-	role="button"
-	tabindex="0"
-	aria-label={node.label}
-	onclick={handleClick}
-	onkeydown={(e) => e.key === 'Enter' && handleClick()}
-	style="transform: translate({offsetX}px, {offsetY}px); cursor: pointer; opacity: {opacity};"
->
-	<!-- Soft contact shadow on the ground -->
-	<path d={box.shadow} class="node-shadow" filter="url(#iso-soft-shadow)" />
-
-	<!-- Left face (shadowed side) -->
-	<path d={box.left} fill={leftFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
-	<path d={box.left} fill="url(#iso-face-shade)" stroke="none" />
-	<!-- Right face (lit side) -->
-	<path d={box.right} fill={rightFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
-	<path d={box.right} fill="url(#iso-face-shade)" stroke="none" />
-	<!-- Top face (brightest) -->
-	<path d={box.top} fill={topFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
-	<!-- Top-face inner highlight to catch the light -->
-	<path d={box.top} fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="1" />
-
-	<!-- Icon resting on the top face -->
-	{#if hasIcon}
-		<ellipse
-			cx={box.iconPos.x}
-			cy={box.iconPos.y}
-			rx={plateRx}
-			ry={plateRy}
-			class="icon-plate"
-		/>
-		<text
-			x={box.iconPos.x}
-			y={box.iconPos.y}
-			text-anchor="middle"
-			dominant-baseline="central"
-			font-size={tileSize * 0.4}
-			class="node-icon"
-			style="pointer-events: none; user-select: none;"
-		>
-			{colours.icon}
-		</text>
-	{/if}
-
-	<!-- Label below the block -->
-	<text
-		x={box.labelPos.x}
-		y={box.labelPos.y}
-		text-anchor="middle"
-		dominant-baseline="middle"
-		class="node-label"
-		style="pointer-events: none; user-select: none;"
+{#if part !== 'label'}
+	<g
+		class="iso-node"
+		class:selected
+		data-node-id={node.id}
+		role="button"
+		tabindex="0"
+		aria-label={node.label}
+		onclick={handleClick}
+		onkeydown={(e) => e.key === 'Enter' && handleClick()}
+		style="transform: translate({offsetX}px, {offsetY}px); cursor: pointer; opacity: {opacity};"
 	>
-		{node.label}
-	</text>
-	{#if node.description}
+		<!-- Soft contact shadow on the ground -->
+		<path d={box.shadow} class="node-shadow" filter="url(#iso-soft-shadow)" />
+
+		<!-- Left face (shadowed side) -->
+		<path d={box.left} fill={leftFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
+		<path d={box.left} fill="url(#iso-face-shade)" stroke="none" />
+		<!-- Right face (lit side) -->
+		<path d={box.right} fill={rightFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
+		<path d={box.right} fill="url(#iso-face-shade)" stroke="none" />
+		<!-- Top face (brightest) + glossy sheen -->
+		<path d={box.top} fill={topFill} stroke={strokeColour} stroke-width={strokeWidth} stroke-linejoin="round" />
+		<path d={box.top} fill="url(#iso-top-sheen)" stroke="none" />
+		<!-- Top-face inner highlight to catch the light -->
+		<path d={box.top} fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1" />
+
+		<!-- Icon resting on the top face -->
+		{#if hasIcon}
+			<ellipse cx={box.iconPos.x} cy={box.iconPos.y} rx={plateRx} ry={plateRy} class="icon-plate" />
+			<text
+				x={box.iconPos.x}
+				y={box.iconPos.y}
+				text-anchor="middle"
+				dominant-baseline="central"
+				font-size={tileSize * 0.4}
+				class="node-icon"
+				style="pointer-events: none; user-select: none;"
+			>
+				{colours.icon}
+			</text>
+		{/if}
+	</g>
+{/if}
+
+{#if part !== 'body'}
+	<!-- Label drawn in a top overlay pass so it never hides behind other cubes -->
+	<g class="iso-node-text" style="transform: translate({offsetX}px, {offsetY}px); opacity: {opacity};">
 		<text
 			x={box.labelPos.x}
-			y={box.labelPos.y + tileSize * 0.2}
+			y={box.labelPos.y}
 			text-anchor="middle"
 			dominant-baseline="middle"
-			class="node-desc"
+			class="node-label"
 			style="pointer-events: none; user-select: none;"
 		>
-			{node.description}
+			{node.label}
 		</text>
-	{/if}
-</g>
+		{#if node.description}
+			<text
+				x={box.labelPos.x}
+				y={box.labelPos.y + tileSize * 0.2}
+				text-anchor="middle"
+				dominant-baseline="middle"
+				class="node-desc"
+				style="pointer-events: none; user-select: none;"
+			>
+				{node.description}
+			</text>
+		{/if}
+	</g>
+{/if}
 
 <style>
 	.iso-node {
