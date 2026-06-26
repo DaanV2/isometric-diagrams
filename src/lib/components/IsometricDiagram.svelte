@@ -178,6 +178,15 @@
 					/* capture unsupported */
 				}
 				dragCaptured = true;
+				// Pin the view to its current pose for the duration of the drag.
+				// Otherwise moving the node changes the content bbox, the auto-fit
+				// view recentres to keep it framed, and that shift cancels out the
+				// drag — the node appears to snap back instead of following the
+				// cursor. Pinning freezes the world↔screen mapping so the node lands
+				// where it's dropped. (Done lazily, like capture, so a plain click
+				// never freezes the view.)
+				userZoom = zoom;
+				userCenter = { ...center };
 			}
 			const world = clientToWorld(e.clientX, e.clientY);
 			const { gx, gy } = screenToIso(
