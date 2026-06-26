@@ -17,6 +17,31 @@
 		{ name: 'Floor Plan', file: 'floor-plan.yaml' }
 	];
 
+	/** Minimal valid starter spec used by the "New" button. */
+	const NEW_GRAPH_TEMPLATE = `title: "Untitled Diagram"
+type: generic
+
+settings:
+  theme: dark
+  showGrid: true
+
+nodes:
+  - id: node-a
+    label: "Node A"
+    type: generic
+    position: { x: 0, y: 0 }
+
+  - id: node-b
+    label: "Node B"
+    type: generic
+    position: { x: 2, y: 0 }
+
+edges:
+  - from: node-a
+    to: node-b
+    directed: true
+`;
+
 	let editorYaml = $state('');
 	let parseError = $state<string | null>(null);
 	let parseErrorLine = $state<number | null>(null);
@@ -63,6 +88,20 @@
 		} catch (e) {
 			parseError = `Could not load example: ${(e as Error).message}`;
 		}
+	}
+
+	/** Start a fresh diagram from the minimal starter template. */
+	function newGraph() {
+		// Guard against silently discarding in-progress work.
+		if (editorYaml.trim() && !confirm('Start a new graph? This will replace the current diagram.')) {
+			return;
+		}
+		editorYaml = NEW_GRAPH_TEMPLATE;
+		activeExample = '';
+		selectedNodeId = null;
+		editorVisible = true;
+		clearShareHash();
+		compileNow();
 	}
 
 	function compileYaml() {
@@ -259,6 +298,9 @@
 			<span class="logo" aria-hidden="true">◆</span>
 			<span>Isometric Diagrams</span>
 		</div>
+		<button class="new-graph-btn" onclick={newGraph} title="Start a new, empty diagram">
+			＋ New
+		</button>
 		<nav aria-label="Examples">
 			{#each EXAMPLES as ex (ex.file)}
 				<button
@@ -472,6 +514,23 @@
 	.logo {
 		color: #4299e1;
 		font-size: 18px;
+	}
+
+	.new-graph-btn {
+		padding: 4px 12px;
+		border-radius: 6px;
+		border: 1px solid #3fb950;
+		background: #15301c;
+		color: #56d364;
+		cursor: pointer;
+		font-size: 12px;
+		font-weight: 600;
+		white-space: nowrap;
+		transition: background 0.15s, color 0.15s;
+	}
+	.new-graph-btn:hover {
+		background: #1b3a24;
+		color: #7ee787;
 	}
 
 	nav {
