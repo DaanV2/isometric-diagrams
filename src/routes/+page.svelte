@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { parseYaml, dumpYaml, ParseError } from '$lib/parser/yaml-parser.js';
 	import { lintSpec, findTokenLine, type Diagnostic } from '$lib/parser/lint.js';
 	import { autoLayout } from '$lib/layout.js';
@@ -224,8 +224,12 @@
 		restored = true;
 	}
 
-	// One-time restore on mount (effects only run in the browser).
-	$effect(() => {
+	// One-time restore on mount. This must NOT be a `$effect`: `init()` calls
+	// `compileNow()` synchronously, which reads `editorYaml` via `parseYaml`,
+	// registering it as a reactive dependency. As an effect that made restore
+	// re-run on every `editorYaml` change — so loading an example would be
+	// instantly reverted to the saved/permalink document. `onMount` runs once.
+	onMount(() => {
 		init();
 	});
 
