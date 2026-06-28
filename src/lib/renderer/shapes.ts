@@ -106,6 +106,39 @@ const EDGE_END_INSET = 0.62;
 const ARROW_LENGTH = 0.52;
 const ARROW_HALF_WIDTH = 0.27;
 
+/**
+ * Point at the half-way mark along a grid-space polyline, measured by arc
+ * length so an L-shaped route anchors its label *on* the ribbon (at/near the
+ * elbow) rather than out on the straight diagonal between the endpoints.
+ */
+function routeMidpoint(pts: GridPoint[]): GridPoint {
+	if (pts.length === 1) return pts[0];
+	let total = 0;
+	for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+	const half = total / 2;
+	let acc = 0;
+	for (let i = 1; i < pts.length; i++) {
+		const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+		if (acc + seg >= half) {
+			const t = seg < 1e-9 ? 0 : (half - acc) / seg;
+			return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t };
+		}
+		acc += seg;
+	}
+	return pts[pts.length - 1];
+}
+
+/**
+ * Arrowhead length (grid units) clamped to the arriving leg so the chevron
+ * never grows longer than the ribbon it caps — for closely-spaced nodes the
+ * inset eats most of the route, and an unclamped head would overshoot back
+ * past the source cube.
+ */
+function arrowLengthFor(prev: GridPoint, tip: GridPoint): number {
+	const legLen = Math.hypot(tip.x - prev.x, tip.y - prev.y);
+	return Math.min(ARROW_LENGTH, legLen);
+}
+
 export interface EdgeGeometry {
 	/** Closed SVG path for the filled ribbon band lying on the ground. */
 	path: string;
@@ -146,17 +179,13 @@ export function edgeGeometry(
 	const tip = inset[inset.length - 1];
 	const prev = inset[inset.length - 2];
 	const arrowPoints = directed
-		? ribbonArrowHead(prev, tip, z, cfg, ARROW_LENGTH, ARROW_HALF_WIDTH)
+		? ribbonArrowHead(prev, tip, z, cfg, arrowLengthFor(prev, tip), ARROW_HALF_WIDTH)
 		: '';
 
-	const midPoint = hasLabel
-		? isoToScreen(
-				(from.position.x + to.position.x) / 2,
-				(from.position.y + to.position.y) / 2,
-				z,
-				cfg
-			)
-		: null;
+	// Anchor the label on the routed band (near the elbow), not on the straight
+	// diagonal between the endpoints — otherwise it floats off the ribbon.
+	const mid = routeMidpoint(route);
+	const midPoint = hasLabel ? isoToScreen(mid.x, mid.y, z, cfg) : null;
 
 	return { path, spine, arrowPoints, midPoint };
 }
@@ -187,7 +216,7 @@ export function flatArrowGeometry(arrow: DiagramFlatArrow, tileSize: number): Fl
 	const spine = polylinePath([from, to], z, cfg);
 
 	const arrowPoints = directed
-		? ribbonArrowHead(from, to, z, cfg, ARROW_LENGTH, ARROW_HALF_WIDTH)
+		? ribbonArrowHead(from, to, z, cfg, arrowLengthFor(from, to), ARROW_HALF_WIDTH)
 		: '';
 
 	const midPoint = arrow.label

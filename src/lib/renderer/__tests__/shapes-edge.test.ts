@@ -41,11 +41,39 @@ describe('edgeGeometry', () => {
 		expect(midPoint).toHaveProperty('y');
 	});
 
-	it('midPoint is at the average grid position on the ground plane (z=0)', () => {
+	it('label midPoint is anchored on the L-shaped route (at the elbow), not the diagonal', () => {
 		const { midPoint } = edgeGeometry(from, to, false, true, TILE);
-		const expected = isoToScreen(1, 1, 0, { tileSize: TILE });
+		// Route (0,0)→(2,0)→(2,2): equal legs, so the arc-length midpoint is the elbow.
+		const elbow = isoToScreen(2, 0, 0, { tileSize: TILE });
+		expect(midPoint!.x).toBeCloseTo(elbow.x, 5);
+		expect(midPoint!.y).toBeCloseTo(elbow.y, 5);
+		// And it is NOT on the straight diagonal midpoint.
+		const diagonal = isoToScreen(1, 1, 0, { tileSize: TILE });
+		expect(Math.hypot(midPoint!.x - diagonal.x, midPoint!.y - diagonal.y)).toBeGreaterThan(1);
+	});
+
+	it('straight (same-row) edge anchors its label at the leg midpoint', () => {
+		const { midPoint } = edgeGeometry(makeNode('a', 0, 0), makeNode('b', 4, 0), false, true, TILE);
+		const expected = isoToScreen(2, 0, 0, { tileSize: TILE });
 		expect(midPoint!.x).toBeCloseTo(expected.x, 5);
 		expect(midPoint!.y).toBeCloseTo(expected.y, 5);
+	});
+
+	it('arrowhead length is clamped for adjacent nodes so it does not overshoot the source', () => {
+		// Adjacent nodes: the inset eats most of the route, leaving a short last leg.
+		const { arrowPoints } = edgeGeometry(makeNode('a', 0, 0), makeNode('b', 0, 1), true, false, TILE);
+		const tip = isoToScreen(0, 1, 0, { tileSize: TILE });
+		const source = isoToScreen(0, 0, 0, { tileSize: TILE });
+		// Every arrowhead vertex must stay between the source and the destination —
+		// none may sit beyond the source cube.
+		const dist = (p: string) => {
+			const [x, y] = p.split(',').map(Number);
+			return Math.hypot(x - tip.x, y - tip.y);
+		};
+		const srcDist = Math.hypot(source.x - tip.x, source.y - tip.y);
+		for (const v of arrowPoints.split(' ')) {
+			expect(dist(v)).toBeLessThanOrEqual(srcDist + 1e-6);
+		}
 	});
 
 	it('position.z defaults to 0 when not provided', () => {
